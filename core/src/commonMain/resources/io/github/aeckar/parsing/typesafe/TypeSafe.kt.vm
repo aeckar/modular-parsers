@@ -21,11 +21,7 @@ import kotlin.reflect.KProperty
 */
 public class $identifier$n<#classTypeArguments("S" " : Symbol")> internal constructor(
     actual: $identifier
-) : TypeSafe$identifier<$identifier$n<#typeArguments("S" "")>>(actual) {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedSymbol<$identifier$n<#typeArguments("S" "")>> {
-        return NamedSymbol(property.name, this)
-    }
-}
+) : TypeSafe$identifier<$identifier$n<#typeArguments("S" "")>>(actual)
 
 /**
  * A token emitted by a [$lowercaseIdentifier symbol][$identifier] with $n components.
@@ -39,7 +35,7 @@ internal class ${identifier}Token$n<#classTypeArguments("T" " : Symbol")>(
 ) : Token<$identifier$n<#typeArguments("T" "")>>(symbol, substring)#if($identifier == "Junction"), JunctionToken#end
 
 #if($identifier == "Junction")
-#forEachOrdinal("    public inline fun <#classTypeArguments('T' ' : Symbol')> ${tokenReceiver}.on$ordinal(action: Token<T$foreach.count>.() -> Unit): Unit = action(${fragileUnsafeCast}.match)
+#forEachOrdinal("public inline fun <#classTypeArguments('T' ' : Symbol')> ${tokenReceiver}.on$ordinal(action: Token<T$foreach.count>.() -> Unit): Unit = action(${fragileUnsafeCast}.match)
 ")
 #else
 /**

@@ -5,8 +5,9 @@ import io.github.aeckar.parsing.NameableSymbol
 import io.github.aeckar.parsing.Symbol
 
 /**
- * A symbol whose matching logic is derived from that of another symbol.
+ * A type-safe symbol.
  *
+ * Enables the todo
  * @param S the inheritor of this class
  */
 public abstract class TypeSafeSymbol<S : TypeSafeSymbol<S>> internal constructor(
@@ -18,7 +19,7 @@ public abstract class TypeSafeSymbol<S : TypeSafeSymbol<S>> internal constructor
 }
 
 /**
- * A [junction symbol][io.github.aeckar.parsing.Junction] whose matching logic is derived from that of another symbol.
+ * A type-safe [junction symbol][io.github.aeckar.parsing.Junction].
  *
  * @param S the inheritor of this class
  */
@@ -27,7 +28,7 @@ public abstract class TypeSafeJunction<S : TypeSafeJunction<S>> internal constru
 ) : TypeSafeSymbol<S>(untyped)
 
 /**
- * A [sequence symbol][io.github.aeckar.parsing.Sequence] whose matching logic is derived from that of another symbol.
+ * A type-safe [sequence symbol][io.github.aeckar.parsing.Sequence].
  *
  * @param S the inheritor of this class
  */

@@ -1,6 +1,6 @@
 @file:Suppress("ConvertToStringTemplate")
 
-package io.github.aeckar.parsing
+import io.github.aeckar.parsing.parser
 
 /*
             id: [a-zA-Z] [a-zA-Z0-9_]*;
@@ -55,16 +55,14 @@ internal val metaGrammar by parser {
     //switch
 
     symbol listener {
-        option1 {
+        onFirst {
 
         }
-        option2 {
+        onSecond {
 
         }
     }
 }
-// TODO later enforce a rigid (not error-prone) api
-// TODO just put extensions (Symbol.name, Symbol.substring, etc.) in the symbol classes themselves!
 
 internal fun main() {
     println("Hello World!")

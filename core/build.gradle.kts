@@ -49,11 +49,10 @@ kotlin {
     linuxX64()
 
     sourceSets {
-        val commonMain by getting {
+        commonMain {
             kotlin.srcDirs("build/generated/sources/commonMain/kotlin")
         }
-
-        val commonTest by getting {
+        commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
             }

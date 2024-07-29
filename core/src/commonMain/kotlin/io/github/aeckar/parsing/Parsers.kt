@@ -10,25 +10,79 @@ public class MalformedParserException(message: String, cause: Throwable? = null)
 /**
  * A parser that performs actions according to a defined grammar.
  *
- * Delegating an instance of this class to a property produces a [named parser][NamedParser].
- * This enables the [import][ParserDsl.import] of unqualified symbols from the delegated property.
+ * Delegating an instance of this class to a property produces a named wrapper of that instance,
+ * enabling the [import][ParserDefinitionDsl.import] of named symbols from a parser.
  */
-public sealed class Parser<P : Parser<P>> : Nameable {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedParser<P> {
-        return NamedParser(property.name, this.unsafeCast())
+public sealed class StaticParser {
+    internal abstract val allSymbols: HashMap<String, NameableSymbol<*>>
+}
+
+//regex()() in "ewfefw"
+//regex("ewfwe") in "ewaewfw"
+
+
+// () : {something with in}
+// ()() : {something with in}
+
+
+
+/**
+ * A named parser that takes no arguments.
+ */
+public class NullaryParser(definition: ParserDefinitionDsl) : StaticParser(), Nameable {
+    override val allSymbols: HashMap<String, NameableSymbol<*>> =
+        HashMap(definition.symbols.size + definition.implicitSymbols.size)
+
+    private val start: Symbol
+    private val skip: Symbol?
+    private val listeners: MutableMap<String, Listener<*>>
+
+    init {
+        definition.implicitSymbols.forEach { (name, symbol) ->
+            if (symbol == null) {
+                throw MalformedParserException("Implicit symbol '$name' is undefined")
+            }
+            allSymbols[name] = symbol
+        }
+        try {
+            start = definition.start
+        } catch (e: RuntimeException) {
+            throw MalformedParserException("Start symbol for is undefined", e)
+        }
+        skip = definition.skipOrNull()
+        allSymbols += definition.symbols
+        listeners = definition.listeners
+    }
+
+    public operator fun invoke(): ParserOperator {
+
+    }
+
+    public operator fun contains(s: String) {
+
+    }
+    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryParser {
+        return NamedNullaryParser(property.name, this)
     }
 }
 
-/**
- *
- */
-public class StatelessParser : Parser<StatelessParser>() {
+public class NamedNullaryParser internal constructor(
+    override val name: String,
+    private val unnamed: NullaryParser
+) : Named {
 
 }
 
+public class UnaryParser(definition: ParserDefinitionDsl) :
+
 /**
- *
+ * A named parser that takes an argument.
  */
-public class StatefulParser : Parser<StatefulParser>() {
+public class NamedParserOperator internal constructor(
+    name: String,
+    unnamed: NullaryParser
+) : AbstractNamedParser(name, unnamed) {
 
 }
+
+public class Na

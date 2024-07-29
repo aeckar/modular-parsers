@@ -27,9 +27,17 @@ public abstract class Symbol internal constructor() {
 }
 
 /**
- * An unnamed symbol.
+ * A symbol that can be given a name by delegating it to a property.
+ *
+ * Delegating an instance of this class to a property produces a [named symbol][NamedSymbol].
+ *
+ * Doing so enables:
+ * - [Importing][ParserDefinitionDsl.import] of symbols from other parsers
+ * - Definition of [recursive][TypeSafeSymbol] symbols
+ *
+ * @param S the inheritor of this class
  */
-public abstract class UnnamedSymbol internal constructor() : Symbol() {
+public abstract class NameableSymbol<S : Symbol> internal constructor() : Symbol() {
     final override val rawName: String by lazy { resolveRawName() }
 
     /**
@@ -39,30 +47,16 @@ public abstract class UnnamedSymbol internal constructor() : Symbol() {
 }
 
 /**
- * A symbol that can be given a name by delegating it to a property.
- *
- * Delegating an instance of this class to a property produces a [named symbol][NamedSymbol].
- *
- * Doing so enables:
- * - [Importing][ParserDsl.import] of symbols from other parsers
- * - Definition of [recursive][TypeSafeSymbol] symbols
- */
-public abstract class NameableSymbol<S : Symbol> internal constructor() : UnnamedSymbol(), Nameable {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedSymbol<S> {
-        return NamedSymbol(property.name, this.unsafeCast())
-    }
-}
-
-/**
  * A symbol given a name by being delegated to a property.
  */
 public class NamedSymbol<S : Symbol>(
     override val name: String,
-    internal var named: S
+    internal var unnamed: S
 ) : Symbol(), Named {
     override val rawName: String get() = name
 
-    override fun match(lexer: Lexer) = named.match(lexer)
+    override fun match(lexer: Lexer) = unnamed.match(lexer)
+    override fun toString(): String = name
 }
 
 /**
@@ -82,7 +76,7 @@ public sealed class ComplexSymbol<S : ComplexSymbol<S>> : NameableSymbol<S>() {
 /**
  * A symbol matching a string of characters.
  */
-public class Text internal constructor(internal val query: String) : NameableSymbol<Text>(), Nameable {
+public class Text internal constructor(internal val query: String) : NameableSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
     override fun match(lexer: Lexer): Symbol? {
@@ -98,7 +92,7 @@ public class Text internal constructor(internal val query: String) : NameableSym
 public class Switch internal constructor(
     internal val switch: String,
     internal val ranges: List<CharRange>
-) : NameableSymbol<Switch>(), Nameable {
+) : NameableSymbol<Switch>() {
     override fun match(lexer: Lexer): Symbol? {
         TODO("Not yet implemented")
     }
@@ -113,7 +107,7 @@ public class Switch internal constructor(
 /**
  * A symbol matching another symbol one or more times in a row.
  */
-public class Repetition<S : Symbol>(internal val query: S) : NameableSymbol<Repetition<S>>(), Nameable {
+public class Repetition<S : Symbol>(internal val query: S) : NameableSymbol<Repetition<S>>() {
 //  todo  fun ParserDsl. eweflmsefms;emf;slemflsefsme
 
     override fun match(lexer: Lexer): Symbol? {

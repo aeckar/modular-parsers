@@ -5,14 +5,14 @@ import io.github.aeckar.parsing.typesafe.TypeSafeJunction
 import io.github.aeckar.parsing.utils.ImmutableList
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
-// Extensions of type Token<...> must be used to ensure proper nesting of token contexts in listeners
+// Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
 
 // ------------------------------ text & switch tokens ------------------------------
 
 /**
  * A matched substring in a given input produced according to the matching logic of a symbol.
  *
- * When tokens are combined into a hierarchy, they form an [abstract syntax tree][todo].
+ * When tokens are combined into a hierarchy, they form an [abstract syntax tree][NamedNullaryParser.accept].
  *
  * Because extension functions of this class are specific to the parameter [T],
  * performing a cast to an instance with another type parameter is discouraged.
