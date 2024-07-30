@@ -7,7 +7,7 @@ public fun interface Listener<T : Symbol> {
     /**
      * Invokes the lambda that defines the listener of a specific named symbol.
      */
-    public operator fun invoke(token: Token<T>)
+    public operator fun Token<T>.invoke()
 }
 
 /**
@@ -20,5 +20,5 @@ public fun interface ListenerWithArgument<T : Symbol, A> {
      *
      * Includes the argument passed to the parser.
      */
-    public operator fun invoke(token: Token<T>, argument: A)
+    public operator fun Token<T>.invoke(argument: A)
 }

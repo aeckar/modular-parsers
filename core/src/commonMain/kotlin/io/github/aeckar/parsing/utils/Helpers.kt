@@ -5,6 +5,7 @@ import io.github.aeckar.parsing.MalformedParserException
 /**
  * Checked `as` casts should be preferred.
  */
+@PublishedApi
 @Suppress("UNCHECKED_CAST")
 internal fun <T> Any?.unsafeCast(): T = this as T
 

@@ -1,6 +1,7 @@
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
+import io.github.aeckar.parsing.typesafe.TypeSafeSequence
 import io.github.aeckar.parsing.typesafe.TypeSafeSymbol
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
@@ -49,9 +50,10 @@ public abstract class NameableSymbol<S : Symbol> internal constructor() : Symbol
 /**
  * A symbol given a name by being delegated to a property.
  */
+@Suppress("unused") // Type parameter used in extensions
 public class NamedSymbol<S : Symbol>(
     override val name: String,
-    internal var unnamed: S
+    internal var unnamed: Symbol
 ) : Symbol(), Named {
     override val rawName: String get() = name
 
@@ -63,8 +65,11 @@ public class NamedSymbol<S : Symbol>(
  * A symbol comprised of more than one other symbol.
  *
  * Can only be named by wrapping this instance in a typed subclass (`<subclass>2`, `<subclass>3`, ...).
+ *
+ * @param U the type-safe variant of this class
+ * @param S the inheritor of this class
  */
-public sealed class ComplexSymbol<S : ComplexSymbol<S>> : NameableSymbol<S>() {
+public sealed class ComplexSymbol<U : TypeSafeSymbol<*, *>, S : ComplexSymbol<U, S>> : NameableSymbol<S>() {
     internal val components = mutableListOf<Symbol>()
 
     // Will not be called before all components are assembled
@@ -76,7 +81,7 @@ public sealed class ComplexSymbol<S : ComplexSymbol<S>> : NameableSymbol<S>() {
 /**
  * A symbol matching a string of characters.
  */
-public class Text internal constructor(internal val query: String) : NameableSymbol<Text>() {
+public class Text internal constructor(private val query: String) : NameableSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
     override fun match(lexer: Lexer): Symbol? {
@@ -90,7 +95,7 @@ public class Text internal constructor(internal val query: String) : NameableSym
  * A symbol matching a single character agreeing with a set of ranges and exact characters.
  */
 public class Switch internal constructor(
-    internal val switch: String,
+    private val switch: String,
     internal val ranges: List<CharRange>
 ) : NameableSymbol<Switch>() {
     override fun match(lexer: Lexer): Symbol? {
@@ -107,31 +112,31 @@ public class Switch internal constructor(
 /**
  * A symbol matching another symbol one or more times in a row.
  */
-public class Repetition<S : Symbol>(internal val query: S) : NameableSymbol<Repetition<S>>() {
+public class Repetition<S : Symbol>(private val query: S) : NameableSymbol<Repetition<S>>() {
 //  todo  fun ParserDsl. eweflmsefms;emf;slemflsefsme
 
     override fun match(lexer: Lexer): Symbol? {
         TODO("Not yet implemented")
     }
 
-    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*>>() + "+"
+    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "+"
 }
 
 /**
  * A symbol matching another symbol, or a zero-length token if that symbol is not found.
  */
-public class Option<S : Symbol>(internal val query: S) : NameableSymbol<Option<S>>() {
+public class Option<S : Symbol>(private val query: S) : NameableSymbol<Option<S>>() {
     override fun match(lexer: Lexer): Symbol? {
         TODO("Not yet implemented")
     }
 
-    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*>>() + "?"
+    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
 }
 
 /**
  * A symbol matching one of several possible other symbols.
  */
-public class Junction internal constructor() : ComplexSymbol<Junction>() {
+public class Junction<S : TypeSafeJunction<S>> internal constructor() : ComplexSymbol<S, Junction<S>>() {
     override fun match(lexer: Lexer): Symbol? {
         TODO("Not yet implemented")
     }
@@ -142,7 +147,7 @@ public class Junction internal constructor() : ComplexSymbol<Junction>() {
 /**
  * A symbol matching multiple symbols in a certain order.
  */
-public class Sequence internal constructor() : ComplexSymbol<Sequence>() {
+public class Sequence<S : TypeSafeSequence<S>> internal constructor() : ComplexSymbol<S, Sequence<S>>() {
     override fun match(lexer: Lexer): Symbol? {
         TODO("Not yet implemented")
     }

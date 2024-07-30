@@ -8,6 +8,15 @@ import kotlin.reflect.KProperty
 public class MalformedParserException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 /**
+ * Returns true if a match to the [start][ParserDefinitionDsl.start] of the parser can be made using this string.
+ */
+public operator fun String.contains(parser: StaticParser): Boolean {
+    // ...
+}
+
+
+
+/**
  * A parser that performs actions according to a defined grammar.
  *
  * Delegating an instance of this class to a property produces a named wrapper of that instance,
@@ -17,8 +26,10 @@ public sealed class StaticParser {
     internal abstract val allSymbols: HashMap<String, NameableSymbol<*>>
 }
 
-//regex()() in "ewfefw"
-//regex("ewfwe") in "ewaewfw"
+//nullary()(source) : Ast
+//unary()(source) : Ast
+//unary(argument)(source) : Ast
+//regex(argument)(source) : ast
 
 
 // () : {something with in}
@@ -29,7 +40,7 @@ public sealed class StaticParser {
 /**
  * A named parser that takes no arguments.
  */
-public class NullaryParser(definition: ParserDefinitionDsl) : StaticParser(), Nameable {
+public class NullaryParser(definition: NullaryParserDefinitionDsl) : StaticParser(), Nameable {
     override val allSymbols: HashMap<String, NameableSymbol<*>> =
         HashMap(definition.symbols.size + definition.implicitSymbols.size)
 
@@ -53,6 +64,7 @@ public class NullaryParser(definition: ParserDefinitionDsl) : StaticParser(), Na
         allSymbols += definition.symbols
         listeners = definition.listeners
     }
+
 
     public operator fun invoke(): ParserOperator {
 

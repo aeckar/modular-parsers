@@ -1,7 +1,6 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.typesafe.Junction2
-import io.github.aeckar.parsing.typesafe.Sequence2
+import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
@@ -11,7 +10,7 @@ import kotlin.reflect.KProperty
  * The symbols in the returned parser are resolved statically during initialization.
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinitionDsl.start] symbol is undefined
  */
-public fun nullaryParser(definition: ParserDefinitionDsl.() -> Unit): NullaryParser {
+public fun nullaryParser(definition: NullaryParserDefinitionDsl.() -> Unit): NullaryParser {
     return NullaryParser(NullaryParserDefinitionDsl().apply(definition))
 }
 
@@ -145,7 +144,7 @@ public sealed class ParserDefinitionDsl {
             }
             symbols[name] = symbol
             return try {
-                NamedSymbol(name, symbol).unsafeCast()
+                NamedSymbol(name, symbol)
             } catch (e: ClassCastException) {
                 throw MalformedParserException(
                     "Symbol '$name' of type ${symbol::class.simpleName} cannot be " +
@@ -160,9 +159,16 @@ public sealed class ParserDefinitionDsl {
      * The definition of this implicit symbol.
      *
      * If not assigned at least once, a [MalformedParserException] is thrown after parser initialization.
+     * @throws MalformedParserException this property is accessed before it is assigned a value
      */
-    public var <S : ComplexSymbol<S>> NamedSymbol<S>.actual: S
-        get() = unnamed
+    public var <U : TypeSafeSymbol<*, *>, S : ComplexSymbol<out U, out S>> NamedSymbol<out S>.actual: U
+        get() {
+            return try {
+                unnamed.unsafeCast()
+            } catch (e: ClassCastException) {
+                throw MalformedParserException("Definition of '$name' accessed before it was defined", e)
+            }
+        }
         set(value) {
             symbols[name] = value
         }
@@ -170,16 +176,16 @@ public sealed class ParserDefinitionDsl {
     /**
      * Returns a [junction][Junction] that can be defined after being delegated to a property.
      *
-     * Because the types of the options cannot be resolved upon naming, they are not cast within listeners.
+     * Because the types of the options cannot be resolved upon naming, they cannot be accessed within listeners.
      */
-    public fun junction(): Junction = Junction()
+    public fun <S : TypeSafeJunction<S>> junction(): Junction<S> = Junction().unsafeCast()
 
     /**
      * Returns a [sequence][Sequence] that can be defined after being delegated to a property.
      *
-     * Because the types of the queries cannot be resolved upon naming, they are not cast within listeners.
+     * Because the types of the queries cannot be resolved upon naming, they cannot be accessed within listeners.
      */
-    public fun sequence(): Sequence = Sequence()
+    public fun <S : TypeSafeSequence<S>> sequence(): Sequence<S> = Sequence().unsafeCast()
 
     // ------------------------------ literals ------------------------------
 
@@ -298,6 +304,8 @@ public sealed class ParserDefinitionDsl {
 
     // ------------------------------ junctions ------------------------------
 
+    // Allow type-safe junctions and sequences to be root of new junction/sequence (types are checked anyways)
+
     /**
      * Returns a junction of the two symbols.
      */
@@ -318,7 +326,7 @@ public sealed class ParserDefinitionDsl {
             components += option1
             components += option2
         }
-        return Junction2(junction)
+        return Junction2(junction.unsafeCast())
     }
 
     // ------------------------------ sequences ------------------------------
@@ -343,7 +351,7 @@ public sealed class ParserDefinitionDsl {
             components += query1
             components += query2
         }
-        return Sequence2(sequence)
+        return Sequence2(sequence.unsafeCast())
     }
 }
 

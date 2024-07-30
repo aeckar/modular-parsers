@@ -1,6 +1,7 @@
 @file:Suppress("ConvertToStringTemplate")
+package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.parser
+import io.github.aeckar.parsing.typesafe.*
 
 /*
             id: [a-zA-Z] [a-zA-Z0-9_]*;
@@ -26,7 +27,7 @@ import io.github.aeckar.parsing.parser
             metaGrammar: rule+;
             skip: ([\u0000-\u0009\u000B-\u001F]+ | '/*'  [-]* '*/' | '//' [-\u0009\u000B-])+;
  */
-internal val metaGrammar by parser {
+internal val metaGrammar by nullaryParser {
     val id by of("a-zA-Z") + anyOf("a-zA-Z0-9_")
 
     val symbol by junction()
@@ -42,25 +43,21 @@ internal val metaGrammar by parser {
     start = multiple(rule)
 
     skip = multipleOf("\u0000-\u0009\u000B-\u001F") or
-            text("/*") + anyOf("-") + text("*/") or
-            text("//") + of("-\u0009\u000B-")
+        text("/*") + anyOf("-") + text("*/") or
+        text("//") + of("-\u0009\u000B-")
 
     symbol.actual = '(' + symbol + ')' or
-            junction or
-            sequence or
-            repetition or
-            option or
-            id //or
+        junction or
+        sequence or
+        repetition or
+        option or
+        any or
+        id //or
     //literal or
     //switch
 
     symbol listener {
-        onFirst {
-
-        }
-        onSecond {
-
-        }
+        this.matchOrdinal
     }
 }
 

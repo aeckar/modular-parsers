@@ -87,11 +87,13 @@ tasks.register("generateTypeSafe") {
 
         println("Generating type-safe declarations from resource $typeSafeTemplatePath")
         for (identifier in identifiers) {
-            for (n in 2..(properties["generated.typesafe.count"] as String).toInt()) {
+            val typeSafeCount = (properties["generated.typesafe.count"] as String).toInt()
+            for (n in 2..typeSafeCount) {
                 val context = VelocityContext().apply {
                     put("identifier", identifier)
                     put("n", n)
                     put("ordinals", ordinals)
+                    put("typeSafeCount", typeSafeCount)
                 }
                 val outputFile = file("build/generated/sources/commonMain/kotlin/$typeSafePackage/$identifier$n.kt")
                 outputFile.parentFile.mkdirs()

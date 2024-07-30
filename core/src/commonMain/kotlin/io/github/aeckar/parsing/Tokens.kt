@@ -2,7 +2,6 @@ package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.JunctionToken
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
-import io.github.aeckar.parsing.utils.ImmutableList
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
 // Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
@@ -63,7 +62,7 @@ public inline fun <T : Symbol> Token<Option<T>>.onSuccess(action: Token<T>.() ->
 internal class RepetitionToken<T : Symbol> internal constructor(
     symbol: Repetition<T>,
     substring: String,
-    internal val matches: ImmutableList<Token<T>>
+    internal val matches: List<Token<T>>   // object : List by mutable
 ) : Token<Repetition<T>>(symbol, substring)
 
 /**
@@ -74,4 +73,12 @@ public val <T : Symbol> Token<Repetition<T>>.matches: List<Token<T>>
 
 // ------------------------------ junction tokens ------------------------------
 
+/**
+ * The index of the option matched by the symbol emitting this token.
+ */
+public val Token<out Junction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionToken>().matchOrdinal
+
+/**
+ * The index of the option matched by the symbol emitting this token.
+ */
 public val Token<TypeSafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionToken>().matchOrdinal

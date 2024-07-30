@@ -1,17 +1,17 @@
 package io.github.aeckar.parsing.typesafe
 
-import io.github.aeckar.parsing.Lexer
-import io.github.aeckar.parsing.NameableSymbol
-import io.github.aeckar.parsing.Symbol
+import io.github.aeckar.parsing.*
 
 /**
  * A type-safe symbol.
  *
  * Enables the todo
+ *
+ * @param U the untyped variant of this class
  * @param S the inheritor of this class
  */
-public abstract class TypeSafeSymbol<S : TypeSafeSymbol<S>> internal constructor(
-    private val untyped: Symbol
+public abstract class TypeSafeSymbol<U : ComplexSymbol<S, U>, S : TypeSafeSymbol<U, S>> internal constructor(
+    internal val untyped: U
 ) : NameableSymbol<S>() {
     final override fun match(lexer: Lexer) = untyped.match(lexer)  // Checked by parser beforehand
 
@@ -24,8 +24,8 @@ public abstract class TypeSafeSymbol<S : TypeSafeSymbol<S>> internal constructor
  * @param S the inheritor of this class
  */
 public abstract class TypeSafeJunction<S : TypeSafeJunction<S>> internal constructor(
-    untyped: Symbol
-) : TypeSafeSymbol<S>(untyped)
+    untyped: Junction<S>
+) : TypeSafeSymbol<Junction<S>, S>(untyped)
 
 /**
  * A type-safe [sequence symbol][io.github.aeckar.parsing.Sequence].
@@ -33,5 +33,5 @@ public abstract class TypeSafeJunction<S : TypeSafeJunction<S>> internal constru
  * @param S the inheritor of this class
  */
 public abstract class TypeSafeSequence<S : TypeSafeSequence<S>> internal constructor(
-    untyped: Symbol
-) : TypeSafeSymbol<S>(untyped)
+    untyped: Sequence<S>
+) : TypeSafeSymbol<Sequence<S>, S>(untyped)
