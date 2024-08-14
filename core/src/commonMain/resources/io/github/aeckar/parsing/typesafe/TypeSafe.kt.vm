@@ -1,9 +1,9 @@
 @file:Suppress("TrailingComma", "SpellCheckingInspection")
 package io.github.aeckar.parsing.typesafe
 #define($lowercaseIdentifier)#if($identifier == "Junction")junction#else#evaluate("sequence")#end#end
-#define($fragileUnsafeCast)fragileUnsafeCast<${identifier}Token$n<#typeArguments("T" "")>>()#end
-#define($tokenReceiver)Token<$identifier$n<#typeArguments("T" "")>>#end
-#define($typeSafeTuple)TypeSafeTuple$n<#typeArguments("Token<T" ">")>#end
+#define($fragileUnsafeCast)fragileUnsafeCast<${identifier}Node$n<#typeArguments("T" "")>>()#end
+#define($nodeReceiver)Node<$identifier$n<#typeArguments("T" "")>>#end
+#define($typeSafeTuple)TypeSafeTuple$n<#typeArguments("Node<T" ">")>#end
 #macro(classTypeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
 #macro(typeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
 #macro(forEachOrdinal $template)#foreach($ordinal in $ordinals)#if($foreach.count > $n)#break#end#evaluate($template)#end#end
@@ -11,11 +11,11 @@ package io.github.aeckar.parsing.typesafe
 #set($nPlus1 = $n + 1)
 
 import io.github.aeckar.parsing.Symbol
-import io.github.aeckar.parsing.Token
+import io.github.aeckar.parsing.Node
 import io.github.aeckar.parsing.$identifier
 import io.github.aeckar.parsing.Text
-import io.github.aeckar.parsing.utils.fragileUnsafeCast
 import io.github.aeckar.parsing.utils.unsafeCast
+import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
 /**
 * A [$lowercaseIdentifier symbol][$identifier] with $n components.
@@ -47,25 +47,25 @@ public class $identifier$n<#classTypeArguments("S" " : Symbol")> internal constr
 }
 
 /**
- * A token emitted by a [$lowercaseIdentifier symbol][$identifier] with $n components.
+ * A node emitted by a [$lowercaseIdentifier symbol][$identifier] with $n components.
  */
 @PublishedApi
-internal class ${identifier}Token$n<#classTypeArguments("T" " : Symbol")>(
+internal class ${identifier}Node$n<#classTypeArguments("T" " : Symbol")>(
     symbol: $identifier$n<#typeArguments("T" "")>,
     substring: String,
-    val #if($identifier == "Junction")match: Token<*>,
+    val #if($identifier == "Junction")match: Node<*>,
     override val matchOrdinal: Int#else#evaluate("matches"): $typeSafeTuple#end
-) : Token<$identifier$n<#typeArguments("T" "")>>(symbol, substring)#if($identifier == "Junction"), JunctionToken#end
+) : Node<$identifier$n<#typeArguments("T" "")>>(symbol, substring)#if($identifier == "Junction"), JunctionNode#end
 
 #if($identifier == "Junction")
 #forEachOrdinal(
 "/*
  * If the $ordinal option is matched, invokes the supplied lambda, else does nothing.
  */
-public inline fun <#classTypeArguments('T' ' : Symbol')> ${tokenReceiver}.on$ordinal(action: Token<T$foreach.count>.() -> Unit) {
-    val token = ${fragileUnsafeCast}
-    if (token.matchOrdinal == $foreach.count) {
-        action(token.match.unsafeCast())
+public inline fun <#classTypeArguments('T' ' : Symbol')> ${nodeReceiver}.on$ordinal(action: Node<T$foreach.count>.() -> Unit) {
+    val node = ${fragileUnsafeCast}
+    if (node.matchOrdinal == $foreach.count) {
+        action(node.match.unsafeCast())
     }
 }
 ")
@@ -92,14 +92,14 @@ public class TypeSafeTuple$n<#classTypeArguments("T" "")> internal constructor(
 }
 
 /**
- * A type-safe tuple of the matches made by the symbol emitting this token.
+ * A type-safe tuple of the matches made by the symbol emitting this node.
  */
-public val <#classTypeArguments('T' ' : Symbol')> ${tokenReceiver}.matches: $typeSafeTuple get() = ${fragileUnsafeCast}.matches
+public val <#classTypeArguments('T' ' : Symbol')> ${nodeReceiver}.matches: $typeSafeTuple get() = ${fragileUnsafeCast}.matches
 
 #forEachOrdinal(
 "/**
- * The $ordinal match made by the symbol emitting this token.
+ * The $ordinal match made by the symbol emitting this node.
  */
-public inline fun <#classTypeArguments('T' ' : Symbol')> $tokenReceiver.$ordinal(action: Token<T$foreach.count>.() -> Unit): Unit = action(${fragileUnsafeCast}.matches.$ordinal)
+public inline fun <#classTypeArguments('T' ' : Symbol')> $nodeReceiver.$ordinal(action: Node<T$foreach.count>.() -> Unit): Unit = action(${fragileUnsafeCast}.matches.$ordinal)
 
 ")#end

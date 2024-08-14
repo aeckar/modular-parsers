@@ -13,7 +13,7 @@ import io.github.aeckar.parsing.*
 public abstract class TypeSafeSymbol<U : ComplexSymbol<S, U>, S : TypeSafeSymbol<U, S>> internal constructor(
     internal val untyped: U
 ) : NameableSymbol<S>() {
-    final override fun match(lexer: Lexer) = untyped.match(lexer)  // Checked by parser beforehand
+    final override fun match(data: ParserMetadata): Node<*>? = untyped.match(data)  // Checked by parser beforehand
 
     final override fun resolveRawName() = untyped.rawName
 }

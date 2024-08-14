@@ -51,6 +51,10 @@ kotlin {
     sourceSets {
         commonMain {
             kotlin.srcDirs("build/generated/sources/commonMain/kotlin")
+            dependencies {
+                implementation(libs.kotlinx.io)
+                implementation(libs.kotlinx.collections.immutable)
+            }
         }
         commonTest {
             dependencies {

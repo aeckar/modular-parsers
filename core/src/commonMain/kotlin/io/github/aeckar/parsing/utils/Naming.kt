@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing
+package io.github.aeckar.parsing.utils
 
 import kotlin.reflect.KProperty
 
@@ -6,7 +6,7 @@ import kotlin.reflect.KProperty
  * Delegating an instance of this class to a property assigns it
  * a [named wrapper][Named] of the original instance.
  */
-public sealed interface Nameable {
+public interface Nameable {
     /**
      * Assigns the delegated property a named wrapper containing this instance.
      */
@@ -18,6 +18,6 @@ public sealed interface Nameable {
  *
  * The [name] of each instance of this class is the same as the name of the delegated property.
  */
-public sealed interface Named {
+public interface Named {
     public val name: String
 }
