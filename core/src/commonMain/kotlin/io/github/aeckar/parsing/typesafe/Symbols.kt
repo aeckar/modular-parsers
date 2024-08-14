@@ -8,7 +8,7 @@ import io.github.aeckar.parsing.*
  * Enables type-safe access to children of each [Node] produced by this symbol.
  */
 public abstract class TypeSafeSymbol<
-    TypeUnsafeT : ComplexSymbol<InheritorT, TypeUnsafeT>,
+    TypeUnsafeT : TypeUnsafeSymbol<InheritorT, TypeUnsafeT>,
     InheritorT : TypeSafeSymbol<TypeUnsafeT, InheritorT>
 > internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
     final override fun match(data: ParserMetadata): Node<*>? = untyped.match(data)  // Checked by parser beforehand

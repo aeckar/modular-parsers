@@ -55,18 +55,18 @@ public class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
 }
 
 /**
- * A symbol representing a symbol that is not a [ComplexSymbol].
+ * A symbol representing a symbol that is not a [TypeUnsafeSymbol].
  */
-public sealed class SimpleSymbol<InheritorT : SimpleSymbol<InheritorT>> : NameableSymbol<InheritorT>()
+public sealed class BasicSymbol<InheritorT : BasicSymbol<InheritorT>> : NameableSymbol<InheritorT>()
 
 /**
  * A symbol comprised of more than one other symbol.
  *
  * Can only be named by wrapping this instance in a typed subclass (`<subclass>2`, `<subclass>3`, ...).
  */
-public sealed class ComplexSymbol<
+public sealed class TypeUnsafeSymbol<
     TypeSafeT : TypeSafeSymbol<*, *>,
-    InheritorT : ComplexSymbol<TypeSafeT, InheritorT>
+    InheritorT : TypeUnsafeSymbol<TypeSafeT, InheritorT>
 > : NameableSymbol<InheritorT>() {
     internal val components = mutableListOf<Symbol>()
 
@@ -89,7 +89,7 @@ public class LexerSymbol(private val start: Fragment) : NameableSymbol<LexerSymb
 /**
  * A symbol matching a string of characters.
  */
-public class Text internal constructor(private val query: String) : SimpleSymbol<Text>() {
+public class Text internal constructor(private val query: String) : BasicSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
     override fun match(data: ParserMetadata): Node<*>? {
@@ -105,7 +105,7 @@ public class Text internal constructor(private val query: String) : SimpleSymbol
 public class Switch internal constructor(
     private val switch: String,
     internal val ranges: List<CharRange>
-) : SimpleSymbol<Switch>() {
+) : BasicSymbol<Switch>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -120,7 +120,7 @@ public class Switch internal constructor(
 /**
  * A symbol matching another symbol one or more times in a row.
  */
-public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
+public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSymbol<Repetition<SubMatchT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -131,7 +131,7 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 /**
  * A symbol matching another symbol, or a zero-length token if that symbol is not found.
  */
-public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
+public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSymbol<Option<SubMatchT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -143,7 +143,7 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
  * A symbol matching one of several possible other symbols.
  */
 public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>>
-internal constructor() : ComplexSymbol<TypeSafeT, Junction<TypeSafeT>>() {
+internal constructor() : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -155,7 +155,7 @@ internal constructor() : ComplexSymbol<TypeSafeT, Junction<TypeSafeT>>() {
  * A symbol matching multiple symbols in a certain order.
  */
 public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>>
-internal constructor() : ComplexSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
+internal constructor() : TypeUnsafeSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }

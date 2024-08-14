@@ -6,7 +6,7 @@ package io.github.aeckar.parsing
 public class Fragment internal constructor(
     internal val root: Symbol
 ) : ParserComponent {
-    internal constructor(root: SimpleSymbol<*>) : this(root as Symbol)
+    internal constructor(root: BasicSymbol<*>) : this(root as Symbol)
 
     /**
      * The name assigned to this symbol if it exists, else its EBNF representation.

@@ -122,7 +122,7 @@ public sealed class DefinitionDsl {
         property: KProperty<*>
     ): NamedSymbol<S> {
         val name = property.name
-        if (this is ComplexSymbol<*, *>) {  // Ensure implicit symbol itself is not used for parsing
+        if (this is TypeUnsafeSymbol<*, *>) {  // Ensure implicit symbol itself is not used for parsing
             implicitSymbols[name] = null
         } else {
             symbols[name] = this
@@ -172,7 +172,7 @@ public sealed class DefinitionDsl {
      * If not assigned at least once, a [MalformedParserException] is thrown after parser initialization.
      * @throws MalformedParserException this property is accessed before it is assigned a value
      */
-    public var <U : TypeSafeSymbol<*, *>, S : ComplexSymbol<out U, out S>> NamedSymbol<out S>.actual: U
+    public var <U : TypeSafeSymbol<*, *>, S : TypeUnsafeSymbol<out U, out S>> NamedSymbol<out S>.actual: U
         get() {
             return try {
                 unnamed.unsafeCast()
