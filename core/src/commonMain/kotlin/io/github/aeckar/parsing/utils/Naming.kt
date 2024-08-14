@@ -4,7 +4,7 @@ import kotlin.reflect.KProperty
 
 /**
  * Delegating an instance of this class to a property assigns it
- * a [named wrapper][Named] of the original instance.
+ * a [Named] wrapper of the original instance.
  */
 public interface Nameable {
     /**
@@ -14,9 +14,10 @@ public interface Nameable {
 }
 
 /**
- * A [symbol][Symbol] or parser delegated to a property.
+ * An object with a name.
  *
- * The [name] of each instance of this class is the same as the name of the delegated property.
+ * Created when a [Nameable] object is delegated to a property.
+ * The [name] of each instance of this class is the same as the name of the property being delegated to.
  */
 public interface Named {
     public val name: String

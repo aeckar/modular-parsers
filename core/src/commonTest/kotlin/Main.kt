@@ -27,7 +27,7 @@ import io.github.aeckar.parsing.typesafe.*
             metaGrammar: rule+;
             skip: ([\u0000-\u0009\u000B-\u001F]+ | '/*'  [-]* '*/' | '//' [-\u0009\u000B-])+;
  */
-internal val metaGrammar by parser {
+internal val metaGrammar by parser<Int> {
     val id by of("a-zA-Z") + anyOf("a-zA-Z0-9_")
 
     val symbol by junction()
@@ -39,6 +39,10 @@ internal val metaGrammar by parser {
     val repetition by symbol + '+'
     val option by symbol + '?'
     val any by symbol + '*'
+
+    init {
+
+    }
 
     start = multiple(rule)
 
@@ -59,6 +63,7 @@ internal val metaGrammar by parser {
     symbol listener {
         this.matchOrdinal
     }
+
 }
 
 internal fun main() {

@@ -5,33 +5,25 @@ import io.github.aeckar.parsing.*
 /**
  * A type-safe symbol.
  *
- * Enables the todo
- *
- * @param U the untyped variant of this class
- * @param S the inheritor of this class
+ * Enables type-safe access to children of each [Node] produced by this symbol.
  */
-public abstract class TypeSafeSymbol<U : ComplexSymbol<S, U>, S : TypeSafeSymbol<U, S>> internal constructor(
-    internal val untyped: U
-) : NameableSymbol<S>() {
+public abstract class TypeSafeSymbol<
+    TypeUnsafeT : ComplexSymbol<InheritorT, TypeUnsafeT>,
+    InheritorT : TypeSafeSymbol<TypeUnsafeT, InheritorT>
+> internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
     final override fun match(data: ParserMetadata): Node<*>? = untyped.match(data)  // Checked by parser beforehand
 
     final override fun resolveRawName() = untyped.rawName
 }
 
 /**
- * A type-safe [junction symbol][io.github.aeckar.parsing.Junction].
- *
- * @param S the inheritor of this class
+ * A type-safe [Junction] wrapper.
  */
-public abstract class TypeSafeJunction<S : TypeSafeJunction<S>> internal constructor(
-    untyped: Junction<S>
-) : TypeSafeSymbol<Junction<S>, S>(untyped)
+public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>>
+internal constructor(untyped: Junction<InheritorT>) : TypeSafeSymbol<Junction<InheritorT>, InheritorT>(untyped)
 
 /**
- * A type-safe [sequence symbol][io.github.aeckar.parsing.Sequence].
- *
- * @param S the inheritor of this class
+ * A type-safe [Sequence] wrapper.
  */
-public abstract class TypeSafeSequence<S : TypeSafeSequence<S>> internal constructor(
-    untyped: Sequence<S>
-) : TypeSafeSymbol<Sequence<S>, S>(untyped)
+public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>>
+internal constructor(untyped: Sequence<InheritorT>) : TypeSafeSymbol<Sequence<InheritorT>, InheritorT>(untyped)

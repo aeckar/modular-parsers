@@ -1,6 +1,6 @@
 package io.github.aeckar.parsing
 
 /**
- * A [symbol][Symbol] or [fragment][Fragment].
+ * A [Symbol] or [Fragment].
  */
 public interface ParserComponent

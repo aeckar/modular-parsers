@@ -25,15 +25,13 @@ public abstract class Symbol internal constructor() : ParserComponent {
 /**
  * A symbol that can be given a name by delegating it to a property.
  *
- * Delegating an instance of this class to a property produces a [named symbol][NamedSymbol].
+ * Delegating an instance of this class to a property produces a [NamedSymbol].
  *
  * Doing so enables:
  * - [Importing][DefinitionDsl.import] of symbols from other parsers
  * - Definition of [recursive][TypeSafeSymbol] symbols
- *
- * @param S the inheritor of this class
  */
-public abstract class NameableSymbol<S : NameableSymbol<S>> internal constructor() : Symbol() {
+public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> internal constructor() : Symbol() {
     final override val rawName: String by lazy { resolveRawName() }
 
     /**
@@ -44,13 +42,11 @@ public abstract class NameableSymbol<S : NameableSymbol<S>> internal constructor
 
 /**
  * A symbol given a name by being delegated to a property.
- *
- * @param S the type of the unnamed symbol wrapped by this instance
  */
 @Suppress("unused") // Type parameter used in extensions
-public class NamedSymbol<S : NameableSymbol<S>>(
+public class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
     override val name: String,
-    internal var unnamed: NameableSymbol<S>
+    internal var unnamed: NameableSymbol<UnnamedT>
 ) : Symbol(), Named {
     override val rawName: String get() = name
 
@@ -59,21 +55,19 @@ public class NamedSymbol<S : NameableSymbol<S>>(
 }
 
 /**
- * A symbol representing a symbol that is not [complex][ComplexSymbol].
- *
- * @param S the inheritor of this class
+ * A symbol representing a symbol that is not a [ComplexSymbol].
  */
-public sealed class SimpleSymbol<S : SimpleSymbol<S>> : NameableSymbol<S>()
+public sealed class SimpleSymbol<InheritorT : SimpleSymbol<InheritorT>> : NameableSymbol<InheritorT>()
 
 /**
  * A symbol comprised of more than one other symbol.
  *
  * Can only be named by wrapping this instance in a typed subclass (`<subclass>2`, `<subclass>3`, ...).
- *
- * @param U the type-safe variant of this class
- * @param S the inheritor of this class
  */
-public sealed class ComplexSymbol<U : TypeSafeSymbol<*, *>, S : ComplexSymbol<U, S>> : NameableSymbol<S>() {
+public sealed class ComplexSymbol<
+    TypeSafeT : TypeSafeSymbol<*, *>,
+    InheritorT : ComplexSymbol<TypeSafeT, InheritorT>
+> : NameableSymbol<InheritorT>() {
     internal val components = mutableListOf<Symbol>()
 
     // Will not be called before all components are assembled
@@ -126,7 +120,7 @@ public class Switch internal constructor(
 /**
  * A symbol matching another symbol one or more times in a row.
  */
-public class Repetition<S : Symbol>(private val query: S) : SimpleSymbol<Repetition<S>>() {
+public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -137,7 +131,7 @@ public class Repetition<S : Symbol>(private val query: S) : SimpleSymbol<Repetit
 /**
  * A symbol matching another symbol, or a zero-length token if that symbol is not found.
  */
-public class Option<S : Symbol>(private val query: S) : SimpleSymbol<Option<S>>() {
+public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -147,10 +141,9 @@ public class Option<S : Symbol>(private val query: S) : SimpleSymbol<Option<S>>(
 
 /**
  * A symbol matching one of several possible other symbols.
- *
- * @param U the type-safe variant of this class
  */
-public class Junction<U : TypeSafeJunction<U>> internal constructor() : ComplexSymbol<U, Junction<U>>() {
+public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>>
+internal constructor() : ComplexSymbol<TypeSafeT, Junction<TypeSafeT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -160,10 +153,9 @@ public class Junction<U : TypeSafeJunction<U>> internal constructor() : ComplexS
 
 /**
  * A symbol matching multiple symbols in a certain order.
- *
- * @param U the type-safe variant of this class
  */
-public class Sequence<U : TypeSafeSequence<U>> internal constructor() : ComplexSymbol<U, Sequence<U>>() {
+public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>>
+internal constructor() : ComplexSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }

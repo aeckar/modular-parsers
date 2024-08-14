@@ -124,16 +124,16 @@ public class NamedNullaryParser internal constructor(
  * A parser that takes an argument,
  * and whose symbols are resolved after their initial definition.
  */
-public class UnaryParser<A>(definition: DefinitionDsl) : StaticParserWithArgument<A>(), Nameable {
+public class UnaryParser<ArgumentT>(definition: DefinitionDsl) : StaticParserWithArgument<ArgumentT>(), Nameable {
     /**
      *
      */
-    public operator fun invoke(argument: A, input: String): AbstractSyntaxTree = parse(argument, StringInputStream(input))
+    public operator fun invoke(argument: ArgumentT, input: String): AbstractSyntaxTree = parse(argument, StringInputStream(input))
 
     /**
      *
      */
-    public operator fun invoke(argument: A, input: Source): AbstractSyntaxTree = parse(argument, SourceInputStream(input))
+    public operator fun invoke(argument: ArgumentT, input: Source): AbstractSyntaxTree = parse(argument, SourceInputStream(input))
 
     override fun parse(input: Stream): AbstractSyntaxTree {
         TODO("Not yet implemented")
@@ -156,10 +156,10 @@ public class UnaryParser<A>(definition: DefinitionDsl) : StaticParserWithArgumen
  * A named parser that takes an argument,
  * and whose symbols are resolved after their initial definition.
  */
-public class NamedUnaryParser<A> internal constructor(
+public class NamedUnaryParser<ArgumentT> internal constructor(
     override val name: String,
-    private val unnamed: UnaryParser<A>
-) : StaticParserWithArgument<A>(), Parser by unnamed, Named {
+    private val unnamed: UnaryParser<ArgumentT>
+) : StaticParserWithArgument<ArgumentT>(), Parser by unnamed, Named {
     override val allSymbols get() = unnamed.allSymbols
 
     override fun parse(input: Stream) = unnamed.parse(input)

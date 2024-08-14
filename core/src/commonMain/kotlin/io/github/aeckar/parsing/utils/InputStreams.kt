@@ -8,7 +8,7 @@ import kotlinx.io.readString
  * Returns the value returned by the supplied lambda,
  * or throws [InputStream.OutOfBoundsSignal] if the cursor is out of bounds.
  */
-private inline fun <R> checkBounds(block: () -> R): R {
+private inline fun <ReturnT> checkBounds(block: () -> ReturnT): ReturnT {
     return try {
         block()
     } catch (_: IndexOutOfBoundsException) {
@@ -31,7 +31,7 @@ internal sealed interface InputStream : AutoCloseable {
     fun hasNext(): Boolean
 
     /**
-     * Thrown when an attempt is made to read from a [character stream][InputStream] that has been exhausted.
+     * Thrown when an attempt is made to read from an input stream that has been exhausted.
      */
     object OutOfBoundsSignal : Throwable()
 }

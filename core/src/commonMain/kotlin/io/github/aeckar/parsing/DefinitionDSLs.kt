@@ -7,6 +7,11 @@ import io.github.aeckar.parsing.utils.OnceAssignable
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
+/*
+    Junctions and sequences between two characters are not implemented because
+    users can simply use a character switch instead.
+ */
+
 /**
  * Creates a new parser.
  * @throws MalformedParserException an implicit, imported, or [start][DefinitionDsl.start] symbol is undefined
@@ -22,8 +27,8 @@ public fun parser(definition: NullaryParserDefinitionDsl.() -> Unit): NullaryPar
  * [init][UnaryParserDefinitionDsl.init] block and symbol [listeners][UnaryParserDefinitionDsl.listener].
  * @throws MalformedParserException an implicit, imported, or [start][DefinitionDsl.start] symbol is undefined
  */
-public fun <A> parser(definition: UnaryParserDefinitionDsl<A>.() -> Unit): UnaryParser<A> {
-    return UnaryParser(UnaryParserDefinitionDsl<A>().apply(definition))
+public fun <ArgumentT> parser(definition: UnaryParserDefinitionDsl<ArgumentT>.() -> Unit): UnaryParser<ArgumentT> {
+    return UnaryParser(UnaryParserDefinitionDsl<ArgumentT>().apply(definition))
 }
 
 /**
@@ -41,12 +46,14 @@ public fun lexerParser(definition: NullaryLexerParserDefinitionDsl.() -> Unit): 
  * [init][UnaryLexerParserDefinitionDsl.init] block and symbol [listeners][UnaryLexerParserDefinitionDsl.listener].
  * @throws MalformedParserException an implicit, imported, or [start][DefinitionDsl.start] symbol is undefined
  */
-public fun <A> lexerParser(definition: UnaryLexerParserDefinitionDsl<A>.() -> Unit): UnaryLexerParser<A> {
-    return UnaryLexerParser(UnaryLexerParserDefinitionDsl<A>().apply(definition))
+public fun <ArgumentT> lexerParser(
+    definition: UnaryLexerParserDefinitionDsl<ArgumentT>.() -> Unit
+): UnaryLexerParser<ArgumentT> {
+    return UnaryLexerParser(UnaryLexerParserDefinitionDsl<ArgumentT>().apply(definition))
 }
 
 /**
- * Defines a scope where [parser][Parser] rules and listeners can be defined.
+ * Defines a scope where [Parser] rules and listeners can be defined.
  *
  * Each listener is invoked from a completed [abstract syntax tree][Parser.toAST] in a top-down, left-to-right fashion.
  */
@@ -132,7 +139,7 @@ public sealed class DefinitionDsl {
 
     /**
      * Delegating an instance of this class to a property assigns it the
-     * [symbol][Symbol] of the same name defined in another named parser.
+     * [Symbol] of the same name defined in another named parser.
      *
      * If the symbol is not defined in the parser, a [MalformedParserException] will be thrown upon delegation.
      */
@@ -179,14 +186,14 @@ public sealed class DefinitionDsl {
         }
 
     /**
-     * Returns a [junction][Junction] that can be defined after being delegated to a property.
+     * Returns a [Junction] that can be defined after being delegated to a property.
      *
      * Because the types of the options are erased, they cannot be accessed within listeners.
      */
     public fun junction(): Junction<*> = Junction()
 
     /**
-     * Returns a [sequence][Sequence] that can be defined after being delegated to a property.
+     * Returns a [Sequence] that can be defined after being delegated to a property.
      *
      * Because the types of the queries are erased, they cannot be accessed within listeners.
      */
@@ -195,14 +202,14 @@ public sealed class DefinitionDsl {
     // ------------------------------ text & switches ------------------------------
 
     /**
-     * Returns a [text][Text] symbol.
+     * Returns a [Text] symbol.
      */
     protected open fun text(query: String): ParserComponent = Text(query)
 
     /**
      * Returns a [character switch][Switch] symbol.
      *
-     * Should be preferred over a [junction] of [text symbols][text] each with a single character.
+     * Should be preferred over a [Junction] of [text symbols][text] each with a single character.
      */
     protected open fun of(switch: String): ParserComponent = with(SwitchStringView(switch)) {
         require(isWithinBounds()) { "Switch definition must not be empty" }
@@ -236,18 +243,18 @@ public sealed class DefinitionDsl {
     // ------------------------------ options ------------------------------
 
     /**
-     * Returns an [option][Option] of the given symbol.
+     * Returns an [Option] of the given symbol.
      *
-     * For [text][Text] symbols, consider using the appropriate overload.
+     * For [Text] symbols, consider using the appropriate overload.
      */
     public fun <S : Symbol> maybe(query: S): Option<S> = Option(query)
 
     // ------------------------------ repetitions ------------------------------
 
     /**
-     * Returns a [repetition][Repetition] of the given symbol.
+     * Returns a [Repetition] of the given symbol.
      *
-     * For [text][Text] symbols, consider using the appropriate overload.
+     * For [Text] symbols, consider using the appropriate overload.
      */
     public fun <S : Symbol> multiple(query: S): Repetition<S> = Repetition(query)
 
@@ -263,7 +270,7 @@ public sealed class DefinitionDsl {
     // Allow type-safe junctions and sequences to be root of new junction/sequence (types are checked anyway)
 
     /**
-     * Returns a junction of the two symbols.
+     * Returns a [Junction] of the two symbols.
      */
     public infix fun <S1 : Symbol, S2 : Symbol> S1.or(option2: S2): Junction2<S1, S2> = toJunction(this, option2)
 
@@ -278,7 +285,7 @@ public sealed class DefinitionDsl {
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a sequence containing the two symbols.
+     * Returns a [Sequence] containing the two symbols.
      */
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
@@ -292,7 +299,7 @@ public sealed class DefinitionDsl {
 }
 
 /**
- * Defines a scope where a [parser][Parser] without a lexer can be defined.
+ * Defines a scope where a [Parser] without a lexer can be defined.
  */
 public sealed class ParserDefinitionDsl : DefinitionDsl() {
     /**
@@ -305,55 +312,55 @@ public sealed class ParserDefinitionDsl : DefinitionDsl() {
     // ------------------------------ text & switches ------------------------------
 
     /**
-     * Assigns a [text symbol][Text] of the single character to the property being delegated to.
+     * Assigns a [Text] symbol of the single character to the property being delegated to.
      */
     public operator fun Char.getValue(thisRef: Nothing?, symbol: KProperty<*>): NamedSymbol<Text> {
         return NamedSymbol(symbol.name, Text(this))
     }
 
     /**
-     * Returns a [text][Text] symbol.
+     * Returns a [Text] symbol.
      */
     public final override fun text(query: String): Text = super.text(query).unsafeCast()
 
     /**
      * Returns a [character switch][Switch] symbol.
      *
-     * Should be preferred over a [junction][or] of [text symbols][text] each with a single character.
+     * Should be preferred over a [Junction][or] of [text symbols][text] each with a single character.
      */
     public final override fun of(switch: String): Switch = super.of(switch).unsafeCast()
 
     // ------------------------------ options ------------------------------
 
     /**
-     * Returns a text [option][Option].
+     * Returns a text [Option].
      */
     public fun maybe(query: String): Option<Text> = Option(Text(query))
 
     /**
-     * Returns a text [option][Option].
+     * Returns a text [Option].
      */
     public fun maybe(query: Char): Option<Text> = Option(Text(query))
 
     /**
-     * Returns a switch [option][Option].
+     * Returns a switch [Option].
      */
     public fun maybeOf(switch: String): Option<Switch> = maybe(of(switch))
 
     // ------------------------------ repetitions ------------------------------
 
     /**
-     * Returns a text [repetition][Repetition].
+     * Returns a text [Repetition].
      */
     public fun multiple(query: String): Repetition<Text> = Repetition(Text(query))
 
     /**
-     * Returns a text [repetition][Repetition].
+     * Returns a text [Repetition].
      */
     public fun multiple(query: Char): Option<Text> = Option(Text(query))
 
     /**
-     * Returns a switch [repetition][Repetition].
+     * Returns a switch [Repetition].
      */
     public fun multipleOf(switch: String): Repetition<Switch> = multiple(of(switch))
 
@@ -377,24 +384,24 @@ public sealed class ParserDefinitionDsl : DefinitionDsl() {
     // ------------------------------ junctions ------------------------------
 
     /**
-     * Returns a junction of this text and the given symbol.
+     * Returns a [Junction] of this text and the given symbol.
      */
     public infix fun <S2 : Symbol> Char.or(option2: S2): Junction2<Text, S2> = toJunction(Text(this), option2)
 
     /**
-     * Returns a junction of this symbol and the given text.
+     * Returns a [Junction] of this symbol and the given text.
      */
     public infix fun <S1 : Symbol> S1.or(option2: Char): Junction2<S1, Text> = toJunction(this, Text(option2))
 
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a sequence containing this text and the given symbol.
+     * Returns a [Sequence] containing this text and the given symbol.
      */
     public operator fun <S2 : Symbol> Char.plus(query2: S2): Sequence2<Text, S2> = toSequence(Text(this), query2)
 
     /**
-     * Returns a sequence containing this symbol and the given text.
+     * Returns a [Sequence] containing this symbol and the given text.
      */
     public operator fun <S1 : Symbol> S1.plus(query2: Char): Sequence2<S1, Text> = toSequence(this, Text(query2))
 }
@@ -415,65 +422,65 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     // ------------------------------ text & switches ------------------------------
 
     /**
-     * Assigns a [text][Text] fragment of the single character to the property being delegated to.
+     * Assigns a [Text] fragment of the single character to the property being delegated to.
      */
     public operator fun Char.getValue(thisRef: Nothing?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
         return NamedSymbol(symbol.name, LexerSymbol(Fragment(Text(this)))).also { lexerSymbols += it }
     }
 
     /**
-     * Returns a [text][Text] fragment.
+     * Returns a [Text] fragment.
      */
     public final override fun text(query: String): Fragment = Fragment(Text(query))
 
     /**
      * Returns a [character switch][Switch] fragment.
      *
-     * Should be preferred over a [junction][or] of [text][text] fragments each with a single character.
+     * Should be preferred over a [Junction][or] of [Text] fragments each with a single character.
      */
     public final override fun of(switch: String): Fragment = Fragment(super.of(switch).unsafeCast())
 
     // ------------------------------ options ------------------------------
 
     /**
-     * Return an [option][Option] of the given fragment.
+     * Return an [Option] of the given fragment.
      */
     public fun maybe(query: Fragment): Fragment = Fragment(maybe(query.root))
 
     /**
-     * Returns a text [option][Option].
+     * Returns a text [Option].
      */
     public fun maybe(query: String): Fragment = Fragment(Option(Text(query)))
 
     /**
-     * Returns a text [option][Option].
+     * Returns a text [Option].
      */
     public fun maybe(query: Char): Fragment = Fragment(Option(Text(query)))
 
     /**
-     * Returns a switch [option][Option].
+     * Returns a switch [Option].
      */
     public fun maybeOf(switch: String): Fragment = Fragment(maybe(super.of(switch) as Switch))
 
     // ------------------------------ repetitions ------------------------------
 
     /**
-     * Returns a [repetition][Repetition] of the given fragment.
+     * Returns a [Repetition] of the given fragment.
      */
     public fun multiple(query: Fragment): Fragment = Fragment(multiple(query.root))
 
     /**
-     * Returns a text [repetition][Repetition].
+     * Returns a text [Repetition].
      */
     public fun multiple(query: String): Fragment = Fragment(Repetition(Text(query)))
 
     /**
-     * Returns a text [repetition][Repetition].
+     * Returns a text [Repetition].
      */
     public fun multiple(query: Char): Fragment = Fragment(Option(Text(query)))
 
     /**
-     * Returns a switch [repetition][Repetition].
+     * Returns a switch [Repetition].
      */
     public fun multipleOf(switch: String): Fragment = Fragment(multiple(super.of(switch) as Switch))
 
@@ -502,7 +509,14 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     // ------------------------------ junctions ------------------------------
 
     /**
-     * Returns a junction of this text and the given fragment.
+     * Returns a [Junction] of the two fragments.
+     */
+    public infix fun Fragment.or(option2: Fragment): Fragment {
+
+    }
+
+    /**
+     * Returns a [Junction] of this text and the given fragment.
      */
     public infix fun Char.or(option2: Fragment): Fragment {
         if (option2 is JunctionFragment) {
@@ -512,7 +526,7 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     }
 
     /**
-     * Returns a junction of this fragment and the given text.
+     * Returns a [Junction] of this fragment and the given text.
      */
     public infix fun Fragment.or(option2: Char): Fragment {
         if (this is JunctionFragment) {
@@ -524,7 +538,14 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a sequence containing this text and the given fragment.
+     * Returns a [Sequence] containing the two fragments
+     */
+    public infix fun Fragment.and(option2: Fragment): Fragment {
+
+    }
+
+    /**
+     * Returns a [Sequence] containing this text and the given fragment.
      */
     public operator fun Char.plus(query2: Fragment): Fragment {
         if (query2 is SequenceFragment) {
@@ -534,7 +555,7 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     }
 
     /**
-     * Returns a sequence containing this fragment and the given text.
+     * Returns a [Sequence] containing this fragment and the given text.
      */
     public operator fun Fragment.plus(query2: Char): Fragment {
         if (this is SequenceFragment) {
