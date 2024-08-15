@@ -3,7 +3,7 @@ package io.github.aeckar.parsing
 /**
  * Can be combined with other fragments to create a [LexerSymbol].
  */
-public class Fragment internal constructor(
+public class SymbolFragment internal constructor(
     internal val root: Symbol
 ) : ParserComponent {
     internal constructor(root: BasicSymbol<*>) : this(root as Symbol)
@@ -13,5 +13,5 @@ public class Fragment internal constructor(
      */
     internal val rawName = root.rawName
 
-    internal fun match(data: ParserMetadata) = root.match(data)?.substring
+    internal fun lex(data: ParserMetadata) = root.match(data)?.substring
 }

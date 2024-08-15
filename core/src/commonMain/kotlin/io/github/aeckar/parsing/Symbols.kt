@@ -79,8 +79,8 @@ public sealed class TypeUnsafeSymbol<
  *
  * Ensures separation between parser symbols literals.
  */
-public class LexerSymbol(private val start: Fragment) : NameableSymbol<LexerSymbol>() {
-    override fun match(data: ParserMetadata) = start.match(data)?.let { Node(this, it) }
+public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<LexerSymbol>() {
+    override fun match(data: ParserMetadata) = start.lex(data)?.let { Node(this, it) }
     override fun resolveRawName() = start.rawName
 }
 
@@ -144,6 +144,11 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSym
  */
 public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>>
 internal constructor() : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
+    internal constructor(option1: Symbol, option2: Symbol) : this() {
+        components += option1
+        components += option2
+    }
+
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }
@@ -156,6 +161,11 @@ internal constructor() : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
  */
 public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>>
 internal constructor() : TypeUnsafeSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
+    internal constructor(query1: Symbol, query2: Symbol) : this() {
+        components += query1
+        components += query2
+    }
+
     override fun match(data: ParserMetadata): Node<*>? {
         TODO("Not yet implemented")
     }

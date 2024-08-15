@@ -1,8 +1,6 @@
 @file:Suppress("ConvertToStringTemplate")
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.typesafe.*
-
 /*
             id: [a-zA-Z] [a-zA-Z0-9_]*;
 

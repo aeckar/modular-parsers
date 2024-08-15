@@ -70,7 +70,7 @@ public class NullaryParser(definition: NullaryParserDefinitionDsl) : Parser, Nam
 
     private val start: Symbol
     private val skip: Symbol?
-    private val listeners: MutableMap<String, Listener<*>>
+    private val listeners: MutableMap<String, NullaryListener<*>>
 
     init {
         definition.implicitSymbols.forEach { (name, symbol) ->

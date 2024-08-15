@@ -12,6 +12,8 @@ import kotlin.reflect.KProperty
     users can simply use a character switch instead.
  */
 
+// ------------------------------ factory functions ------------------------------
+
 /**
  * Creates a new parser.
  * @throws MalformedParserException an implicit, imported, or [start][DefinitionDsl.start] symbol is undefined
@@ -51,6 +53,8 @@ public fun <ArgumentT> lexerParser(
 ): UnaryLexerParser<ArgumentT> {
     return UnaryLexerParser(UnaryLexerParserDefinitionDsl<ArgumentT>().apply(definition))
 }
+
+// ------------------------------ abstract definition DSLs ------------------------------
 
 /**
  * Defines a scope where [Parser] rules and listeners can be defined.
@@ -133,9 +137,8 @@ public sealed class DefinitionDsl {
     /**
      * Allows the importing of a symbol from another named parser.
      */
-    public fun <NameableT : NameableSymbol<NameableT>> NamedParser.import(): SymbolImport<NameableT> = SymbolImport(this)
-
-    // TODO import token from lexer-parser
+    public fun <NameableT : NameableSymbol<NameableT>>
+    NamedParser.import(): SymbolImport<NameableT> = SymbolImport(this)
 
     /**
      * Delegating an instance of this class to a property assigns it the
@@ -276,11 +279,7 @@ public sealed class DefinitionDsl {
     public infix fun <S1 : Symbol, S2 : Symbol> S1.or(option2: S2): Junction2<S1, S2> = toJunction(this, option2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
-        val junction = Junction().apply {
-            components += option1
-            components += option2
-        }
-        return Junction2(junction.unsafeCast())
+        return Junction2(Junction(option1, option2).unsafeCast())
     }
 
     // ------------------------------ sequences ------------------------------
@@ -291,11 +290,7 @@ public sealed class DefinitionDsl {
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
-        val sequence = Sequence().apply {
-            components += query1
-            components += query2
-        }
-        return Sequence2(sequence.unsafeCast())
+        return Sequence2(Sequence(query1, query2).unsafeCast())
     }
 }
 
@@ -315,7 +310,7 @@ public sealed class ParserDefinitionDsl : DefinitionDsl() {
     /**
      * Assigns a [Text] symbol of the single character to the property being delegated to.
      */
-    public operator fun Char.getValue(thisRef: Nothing?, symbol: KProperty<*>): NamedSymbol<Text> {
+    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<Text> {
         return NamedSymbol(symbol.name, Text(this))
     }
 
@@ -420,120 +415,141 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
 
     internal val lexerSymbols = mutableListOf<NamedSymbol<LexerSymbol>>()
 
+    // ------------------------------ symbol definition ------------------------------
+
+    /**
+     * Assigns a [LexerSymbol] matching this fragment to the property being delegated to.
+     */
+    public operator fun SymbolFragment.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
+        return NamedSymbol(symbol.name, LexerSymbol(this))
+    }
+
     // ------------------------------ text & switches ------------------------------
 
     /**
-     * Assigns a [Text] fragment of the single character to the property being delegated to.
+     * Assigns a [LexerSymbol] matching this character to the property being delegated to.
      */
-    public operator fun Char.getValue(thisRef: Nothing?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
-        return NamedSymbol(symbol.name, LexerSymbol(Fragment(Text(this)))).also { lexerSymbols += it }
+    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
+        return NamedSymbol(symbol.name, LexerSymbol(SymbolFragment(Text(this)))).also { lexerSymbols += it }
     }
 
     /**
      * Returns a [Text] fragment.
      */
-    public final override fun text(query: String): Fragment = Fragment(Text(query))
+    public final override fun text(query: String): SymbolFragment = SymbolFragment(Text(query))
 
     /**
      * Returns a [character switch][Switch] fragment.
      *
      * Should be preferred over a [Junction][or] of [Text] fragments each with a single character.
      */
-    public final override fun of(switch: String): Fragment = Fragment(super.of(switch).unsafeCast())
+    public final override fun of(switch: String): SymbolFragment = SymbolFragment(super.of(switch).unsafeCast())
 
     // ------------------------------ options ------------------------------
 
     /**
      * Return an [Option] of the given fragment.
      */
-    public fun maybe(query: Fragment): Fragment = Fragment(maybe(query.root))
+    public fun maybe(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(query.root))
 
     /**
      * Returns a text [Option].
      */
-    public fun maybe(query: String): Fragment = Fragment(Option(Text(query)))
+    public fun maybe(query: String): SymbolFragment = SymbolFragment(Option(Text(query)))
 
     /**
      * Returns a text [Option].
      */
-    public fun maybe(query: Char): Fragment = Fragment(Option(Text(query)))
+    public fun maybe(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
 
     /**
      * Returns a switch [Option].
      */
-    public fun maybeOf(switch: String): Fragment = Fragment(maybe(super.of(switch) as Switch))
+    public fun maybeOf(switch: String): SymbolFragment = SymbolFragment(maybe(super.of(switch) as Switch))
 
     // ------------------------------ repetitions ------------------------------
 
     /**
      * Returns a [Repetition] of the given fragment.
      */
-    public fun multiple(query: Fragment): Fragment = Fragment(multiple(query.root))
+    public fun multiple(query: SymbolFragment): SymbolFragment = SymbolFragment(multiple(query.root))
 
     /**
      * Returns a text [Repetition].
      */
-    public fun multiple(query: String): Fragment = Fragment(Repetition(Text(query)))
+    public fun multiple(query: String): SymbolFragment = SymbolFragment(Repetition(Text(query)))
 
     /**
      * Returns a text [Repetition].
      */
-    public fun multiple(query: Char): Fragment = Fragment(Option(Text(query)))
+    public fun multiple(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
 
     /**
      * Returns a switch [Repetition].
      */
-    public fun multipleOf(switch: String): Fragment = Fragment(multiple(super.of(switch) as Switch))
+    public fun multipleOf(switch: String): SymbolFragment = SymbolFragment(multiple(super.of(switch) as Switch))
 
     // ------------------------------ optional repetitions ------------------------------
 
     /**
      * Returns an optional repetition of the given fragment.
      */
-    public fun any(query: Fragment): Fragment = Fragment(maybe(multiple(query.root)))
+    public fun any(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(multiple(query.root)))
 
     /**
      * Returns an optional repetition of the text.
      */
-    public fun any(query: String): Fragment = Fragment(maybe(multiple(Text(query))))
+    public fun any(query: String): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
 
     /**
      * Returns an optional repetition of the text.
      */
-    public fun any(query: Char): Fragment = Fragment(maybe(multiple(Text(query))))
+    public fun any(query: Char): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
 
     /**
      * Returns an optional repetition of the switch.
      */
-    public fun anyOf(switch: String): Fragment = Fragment(any(super.of(switch) as Switch))
+    public fun anyOf(switch: String): SymbolFragment = SymbolFragment(any(super.of(switch) as Switch))
 
     // ------------------------------ junctions ------------------------------
 
     /**
      * Returns a [Junction] of the two fragments.
      */
-    public infix fun Fragment.or(option2: Fragment): Fragment {
-
+    public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
+        val other = option2.root
+        if (root is Junction<*>) {
+            root.components += other
+            return this
+        }
+        if (other is Junction<*>) {
+            other.components += root
+            return option2
+        }
+        return SymbolFragment(Junction(root, other))
     }
 
     /**
      * Returns a [Junction] of this text and the given fragment.
      */
-    public infix fun Char.or(option2: Fragment): Fragment {
-        if (option2 is JunctionFragment) {
-            option2.root.unsafeCast<TypeSafeJunction<*>>().untyped
+    public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
+        val other = option2.root
+        if (other is Junction<*>) {
+            other.components += Text(this)
+            return option2
         }
-        JunctionFragment(toJunction(Text(this), option2.root))
+        return SymbolFragment(Junction(Text(this), other))
     }
 
     /**
      * Returns a [Junction] of this fragment and the given text.
      */
-    public infix fun Fragment.or(option2: Char): Fragment {
-        if (this is JunctionFragment) {
-
+    public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
+        if (root is Junction<*>) {
+            root.components += Text(option2)
+            return this
         }
-        JunctionFragment(toJunction(root, Text(option2)))
+        return SymbolFragment(Junction(Text(option2), root))
     }
 
     // ------------------------------ sequences ------------------------------
@@ -541,38 +557,86 @@ public sealed class LexerParserDefinitionDsl : DefinitionDsl() {
     /**
      * Returns a [Sequence] containing the two fragments
      */
-    public infix fun Fragment.and(option2: Fragment): Fragment {
-
+    public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
+        val other = query2.root
+        if (root is Sequence<*>) {
+            root.components += other
+            return this
+        }
+        if (other is Sequence<*>) {
+            other.components += root
+            return query2
+        }
+        return SymbolFragment(Sequence(root, other))
     }
 
     /**
      * Returns a [Sequence] containing this text and the given fragment.
      */
-    public operator fun Char.plus(query2: Fragment): Fragment {
-        if (query2 is SequenceFragment) {
-
+    public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
+        val other = query2.root
+        if (other is Sequence<*>) {
+            other.components += Text(this)
+            return query2
         }
-        SequenceFragment(toSequence(Text(this), query2.root))
+        return SymbolFragment(Sequence(Text(this), other))
     }
 
     /**
      * Returns a [Sequence] containing this fragment and the given text.
      */
-    public operator fun Fragment.plus(query2: Char): Fragment {
-        if (this is SequenceFragment) {
-
+    public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
+        if (root is Sequence<*>) {
+            root.components += Text(query2)
+            return this
         }
-        SequenceFragment(toSequence(root, Text(query2)))
+        return SymbolFragment(Sequence(Text(query2), root))
     }
 }
 
-public class NullaryParserDefinitionDsl internal constructor() : ParserDefinitionDsl() {
-    internal val listeners = mutableMapOf<String, Listener<*>>()
+// ------------------------------ concrete definition DSLs ------------------------------
+
+/**
+ * A [definition][DefinitionDsl] of a parser without an argument.
+ */
+public sealed interface NullaryDefinitionDsl {
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol, the listener is invoked.
+     */
+    public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>)
+}
+
+/**
+ * A [definition][DefinitionDsl] of a parser with one argument.
+ */
+public sealed interface UnaryDefinitionDsl<ArgumentT> {
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol, the listener is invoked.
+     */
+    public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
+        action: UnaryListener<MatchT, ArgumentT>
+    )
+
+    /**
+     * Describes the initialization logic of the argument supplied to this parser.
+     */
+    public fun init(initializer: Consumer<ArgumentT>)
+}
+
+/**
+ * Defines a scope where a [Parser] without a lexer that does not take an argument can be defined.
+ */
+public class NullaryParserDefinitionDsl internal constructor() : ParserDefinitionDsl(), NullaryDefinitionDsl {
+    internal val listeners = mutableMapOf<String, NullaryListener<*>>()
 
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
-    public infix fun <T : NameableSymbol<T>> NamedSymbol<T>.listener(action: Listener<T>) {
+    override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>) {
         if (name in listeners) {
             raiseAmbiguousListener(name)
         }
@@ -580,16 +644,21 @@ public class NullaryParserDefinitionDsl internal constructor() : ParserDefinitio
     }
 }
 
+/**
+ * Defines a scope where a [Parser] without a lexer that takes one argument can be defined.
+ */
+public class UnaryParserDefinitionDsl<ArgumentT>
+internal constructor() : ParserDefinitionDsl(), UnaryDefinitionDsl<ArgumentT> {
+    internal val listeners = mutableMapOf<String, UnaryListener<*, ArgumentT>>()
 
-public open class UnaryParserDefinitionDsl<A> internal constructor() : ParserDefinitionDsl() {
-    internal val listeners = mutableMapOf<String, ListenerWithArgument<*, A>>()
-
-    internal var initializer: Consumer<A>? = null
+    internal var initializer: Consumer<ArgumentT>? = null
 
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
-    public infix fun <T : NameableSymbol<T>> NamedSymbol<T>.listener(action: ListenerWithArgument<T, A>) {
+    override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
+        action: UnaryListener<MatchT, ArgumentT>
+    ) {
         if (name in listeners) {
             raiseAmbiguousListener(name)
         }
@@ -598,8 +667,22 @@ public open class UnaryParserDefinitionDsl<A> internal constructor() : ParserDef
     /**
      * Describes the initialization logic of arguments supplied to this parser.
      */
-    public fun init(initializer: Consumer<A>) {
+    override fun init(initializer: Consumer<ArgumentT>) {
         this.initializer?.let { throw MalformedParserException("Initializer defined more than once") }
         this.initializer = initializer
     }
 }
+
+/**
+ * Defines a scope where a [LexerParser] that does not take an argument can be defined.
+ */
+public class NullaryLexerParserDefinitionDsl internal constructor(
+    internal val base: NullaryParserDefinitionDsl = NullaryParserDefinitionDsl()    // Never explicitly given
+) : LexerParserDefinitionDsl(), NullaryDefinitionDsl by base
+
+/**
+ * Defines a scope where a [LexerParser] that takes one argument can be defined.
+ */
+public class UnaryLexerParserDefinitionDsl<ArgumentT> internal constructor(
+    internal val base: UnaryParserDefinitionDsl<ArgumentT> = UnaryParserDefinitionDsl() // Never explicitly given
+) : LexerParserDefinitionDsl(), UnaryDefinitionDsl<ArgumentT> by base
