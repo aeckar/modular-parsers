@@ -1,0 +1,102 @@
+@file:Suppress("TrailingComma", "SpellCheckingInspection", "UnusedImport")
+package io.github.aeckar.parsing.typesafe
+#define($fragileUnsafeCast)fragileUnsafeCast<${identifier}Node$n<#typeArguments("E" "")>>()#end
+#define($nodeReceiver)Node<$identifier$n<#typeArguments("E" "")>>#end
+#define($typeSafeTuple)TypeSafeTuple$n<#typeArguments("Node<E" ">")>#end
+#macro(classTypeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
+#macro(typeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
+#macro(forEachOrdinal $template)#foreach($ordinal in $ordinals)#if($foreach.count > $n)#break#end#set($capitalOrdinal = $capitalizeFirstChar.invoke($ordinal))#evaluate($template)#end#end
+#macro(addToUntyped $varName $suffix)untyped.apply { components += ${varName}$nPlus1$suffix }.unsafeCast()#end
+#set($nPlus1 = $n + 1)
+
+import io.github.aeckar.parsing.Symbol
+import io.github.aeckar.parsing.Node
+import io.github.aeckar.parsing.$identifier
+import io.github.aeckar.parsing.Text
+import io.github.aeckar.parsing.utils.unsafeCast
+import io.github.aeckar.parsing.utils.fragileUnsafeCast
+
+/**
+* A [$identifier] with $n components.
+*/
+public class $identifier$n<#classTypeArguments("E" " : Symbol")> internal constructor(
+    untyped: $identifier<$identifier$n<#typeArguments("E" "")>>
+) : TypeSafe$identifier<$identifier$n<#typeArguments("E" "")>>(untyped)#if($n != $typeSafeCount)#if($identifier == "Junction") {
+    /**
+     * Adds the text as an option in this junction.
+     */
+    public infix fun or(option$nPlus1: Char): Junction$nPlus1<#typeArguments("E" "")Text> = Junction$nPlus1(#addToUntyped("Text(option" ")"))
+
+    /**
+     * Adds the symbol as an option in this junction.
+     */
+    public infix fun <S$nPlus1 : Symbol> or(option$nPlus1: S$nPlus1): Junction$nPlus1<#typeArguments("E" "")S$nPlus1> = Junction$nPlus1(#addToUntyped("option" ""))
+#else    /**
+     * Adds the text to this sequence.
+     */
+    public operator fun plus(query$nPlus1: Char): Sequence$nPlus1<#typeArguments("E" "")Text> = Sequence$nPlus1(#addToUntyped("Text(query" ")"))
+
+    /**
+     * Adds the symbol to this sequence
+     */
+    public operator fun <S$nPlus1 : Symbol> plus(query$nPlus1: S$nPlus1): Sequence$nPlus1<#typeArguments("E" "")S$nPlus1> = Sequence$nPlus1(#addToUntyped("query" ""))
+#end}#end
+
+/**
+ * A node emitted by a [$identifier] with $n components.
+ */
+@PublishedApi
+internal class ${identifier}Node$n<#classTypeArguments("E" " : Symbol")>(
+    symbol: $identifier$n<#typeArguments("E" "")>,
+    substring: String,
+    val #if($identifier == "Junction")match: Node<*>,
+    override val matchOrdinal: Int#else#evaluate("matches"): $typeSafeTuple#end
+) : Node<$identifier$n<#typeArguments("E" "")>>(symbol, substring)#if($identifier == "Junction"), JunctionNode#end
+
+#if($identifier == "Junction")
+#forEachOrdinal(
+"/*
+ * If the $ordinal option is matched, invokes the supplied lambda, else does nothing.
+ */
+public inline fun <#classTypeArguments('E' ' : Symbol')> ${nodeReceiver}.on$capitalOrdinal(action: Node<E$foreach.count>.() -> Unit) {
+    val node = ${fragileUnsafeCast}
+    if (node.matchOrdinal == $foreach.count) {
+        action(node.match.unsafeCast())
+    }
+}
+
+")
+#else
+/**
+ * A type-safe tuple containing $n elements.
+ */
+public class TypeSafeTuple$n<#classTypeArguments("E" "")> internal constructor(
+#forEachOrdinal(
+"    /**
+     * The $ordinal element in this tuple.
+     */
+    public var $ordinal: E$foreach.count,
+
+")
+) {
+#forEachOrdinal(
+"    /**
+     * Returns the [$ordinal] element.
+     */
+    public operator fun component${foreach.count}(): E$foreach.count = $ordinal
+
+")
+}
+
+/**
+ * A type-safe tuple of the matches made by the symbol emitting this node.
+ */
+public val <#classTypeArguments('E' ' : Symbol')> ${nodeReceiver}.matches: $typeSafeTuple get() = ${fragileUnsafeCast}.matches
+
+#forEachOrdinal(
+"/**
+ * The $ordinal match made by the symbol emitting this node.
+ */
+public inline fun <#classTypeArguments('E' ' : Symbol')> $nodeReceiver.$ordinal(action: Node<E$foreach.count>.() -> Unit): Unit = action(${fragileUnsafeCast}.matches.$ordinal)
+
+")#end

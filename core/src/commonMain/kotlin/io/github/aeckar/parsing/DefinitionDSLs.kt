@@ -133,7 +133,7 @@ public sealed class DefinitionDsl {
     /**
      * Allows the importing of a symbol from another named parser.
      */
-    public fun <S : NameableSymbol<S>> NamedParser.import(): SymbolImport<S> = SymbolImport(this)
+    public fun <NameableT : NameableSymbol<NameableT>> NamedParser.import(): SymbolImport<NameableT> = SymbolImport(this)
 
     // TODO import token from lexer-parser
 
@@ -143,10 +143,10 @@ public sealed class DefinitionDsl {
      *
      * If the symbol is not defined in the parser, a [MalformedParserException] will be thrown upon delegation.
      */
-    public inner class SymbolImport<S : NameableSymbol<S>> internal constructor(
+    public inner class SymbolImport<NameableT : NameableSymbol<NameableT>> internal constructor(
         private val from: StaticParser
     ) : Nameable {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): NamedSymbol<S> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): NamedSymbol<NameableT> {
             val name = property.name
             val symbol = try {
                 from.allSymbols.getValue(name)
@@ -172,7 +172,8 @@ public sealed class DefinitionDsl {
      * If not assigned at least once, a [MalformedParserException] is thrown after parser initialization.
      * @throws MalformedParserException this property is accessed before it is assigned a value
      */
-    public var <U : TypeSafeSymbol<*, *>, S : TypeUnsafeSymbol<out U, out S>> NamedSymbol<out S>.actual: U
+    public var <TypeSafeT : TypeSafeSymbol<*, *>, TypeUnsafeT : TypeUnsafeSymbol<out TypeSafeT, out TypeUnsafeT>>
+    NamedSymbol<out TypeUnsafeT>.actual: TypeSafeT
         get() {
             return try {
                 unnamed.unsafeCast()
@@ -247,7 +248,7 @@ public sealed class DefinitionDsl {
      *
      * For [Text] symbols, consider using the appropriate overload.
      */
-    public fun <S : Symbol> maybe(query: S): Option<S> = Option(query)
+    public fun <QueryT : Symbol> maybe(query: QueryT): Option<QueryT> = Option(query)
 
     // ------------------------------ repetitions ------------------------------
 
@@ -256,14 +257,14 @@ public sealed class DefinitionDsl {
      *
      * For [Text] symbols, consider using the appropriate overload.
      */
-    public fun <S : Symbol> multiple(query: S): Repetition<S> = Repetition(query)
+    public fun <QueryT : Symbol> multiple(query: QueryT): Repetition<QueryT> = Repetition(query)
 
     // ------------------------------ optional repetitions ------------------------------
 
     /**
      * Returns an optional repetition of the given symbol.
      */
-    public fun <S : Symbol> any(query: S): Option<Repetition<S>> = maybe(multiple(query))
+    public fun <QueryT : Symbol> any(query: QueryT): Option<Repetition<QueryT>> = maybe(multiple(query))
 
     // ------------------------------ junctions ------------------------------
 

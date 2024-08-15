@@ -76,20 +76,23 @@ tasks.register("generateTypeSafe") {
     group = "build"
     description = "Generates type-safe symbols, tokens, token extensions, and tuples"
 
+    val resourcesPath = "${projectDir}/src/commonMain/resources"
+    val typeSafePackage = "io/github/aeckar/parsing/typesafe"
+    val typeSafeTemplatePath = "$typeSafePackage/TypeSafeDeclarations.kt.vm"
+
+    inputs.file("$resourcesPath/$typeSafeTemplatePath")
+
     doLast {
         val engine = VelocityEngine().apply {
-            setProperty(RESOURCE_LOADERS, "file")
+            setProperty(RESOURCE_LOADERS, "file,classpath")
             setProperty("resource.loader.file.class", FileResourceLoader::class.java.name)
-            setProperty("resource.loader.file.path", "${projectDir}/src/commonMain/resources")
+            setProperty("resource.loader.file.path", resourcesPath)
             setProperty("resource.loader.cache", true)
             init()
         }
-
-        val typeSafePackage = "io/github/aeckar/parsing/typesafe"
-        val typeSafeTemplatePath = "$typeSafePackage/TypeSafe.kt.vm"
         val identifiers = listOf("Junction", "Sequence")
 
-        println("Generating type-safe declarations from resource $typeSafeTemplatePath")
+        println("Generating type-safe declarations from template $typeSafeTemplatePath")
         for (identifier in identifiers) {
             val typeSafeCount = (properties["generated.typesafe.count"] as String).toInt()
             for (n in 2..typeSafeCount) {
@@ -98,6 +101,7 @@ tasks.register("generateTypeSafe") {
                     put("n", n)
                     put("ordinals", ordinals)
                     put("typeSafeCount", typeSafeCount)
+                    put("capitalizeFirstChar") { input: String -> input.replaceFirstChar(Char::uppercaseChar) }
                 }
                 val outputFile = file("build/generated/sources/commonMain/kotlin/$typeSafePackage/$identifier$n.kt")
                 outputFile.parentFile.mkdirs()
