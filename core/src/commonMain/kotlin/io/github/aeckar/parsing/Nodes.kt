@@ -10,7 +10,7 @@ import kotlinx.collections.immutable.persistentListOf
 /**
  * A matched substring in a given input produced according to the matching logic of a symbol.
  *
- * When nodes are combined into a hierarchy, they form an [abstract syntax tree][Parser.toAST].
+ * When nodes are combined into a hierarchy, they form an [abstract syntax tree][Parser.parse].
  *
  * Because extension functions of this class are specific to the parameter [MatchT],
  * performing a cast to an instance with another type parameter may break the API.

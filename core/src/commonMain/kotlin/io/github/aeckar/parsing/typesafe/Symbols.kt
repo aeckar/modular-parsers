@@ -19,11 +19,13 @@ public abstract class TypeSafeSymbol<
 /**
  * A type-safe [Junction] wrapper.
  */
-public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>>
-internal constructor(untyped: Junction<InheritorT>) : TypeSafeSymbol<Junction<InheritorT>, InheritorT>(untyped)
+public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>> internal constructor(
+    untyped: Junction<InheritorT>
+) : TypeSafeSymbol<Junction<InheritorT>, InheritorT>(untyped)
 
 /**
  * A type-safe [Sequence] wrapper.
  */
-public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>>
-internal constructor(untyped: Sequence<InheritorT>) : TypeSafeSymbol<Sequence<InheritorT>, InheritorT>(untyped)
+public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>> internal constructor(
+    untyped: Sequence<InheritorT>
+) : TypeSafeSymbol<Sequence<InheritorT>, InheritorT>(untyped)

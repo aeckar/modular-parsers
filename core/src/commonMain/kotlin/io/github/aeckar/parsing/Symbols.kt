@@ -28,7 +28,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
  * Delegating an instance of this class to a property produces a [NamedSymbol].
  *
  * Doing so enables:
- * - [Importing][DefinitionDsl.import] of symbols from other parsers
+ * - [Importing][ParserDefinition.import] of symbols from other parsers
  * - Definition of [recursive][TypeSafeSymbol] symbols
  */
 public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> internal constructor() : Symbol() {
@@ -142,8 +142,8 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSym
 /**
  * A symbol matching one of several possible other symbols.
  */
-public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>>
-internal constructor() : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
+public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal constructor(
+) : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
     internal constructor(option1: Symbol, option2: Symbol) : this() {
         components += option1
         components += option2
@@ -159,8 +159,8 @@ internal constructor() : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
 /**
  * A symbol matching multiple symbols in a certain order.
  */
-public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>>
-internal constructor() : TypeUnsafeSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
+public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal constructor(
+) : TypeUnsafeSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
     internal constructor(query1: Symbol, query2: Symbol) : this() {
         components += query1
         components += query2

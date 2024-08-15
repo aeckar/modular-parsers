@@ -45,26 +45,7 @@ internal class StringInputStream(private val input: String) : InputStream {
     /**
      * A stack of saved indices.
      */
-    private val savedPositions = object {
-        private var size: Int = 0
-        private var data: IntArray = IntArray(size)
-
-        operator fun get(index: Int) = data[index]
-
-        operator fun plusAssign(n: Int) {
-            if (size == data.size) {
-                val new = IntArray(size * 2)
-                data.copyInto(new)
-                data = new
-            }
-            data[size] = n
-            ++size
-        }
-
-        fun removeLast() = data[size - 1].also { --size }
-
-        override fun toString() = data.toString()
-    }
+    private val savedPositions = IntStack()
 
     override fun advancePosition(places: Int) {
         position += places
