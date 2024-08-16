@@ -1,17 +1,12 @@
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.utils.*
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.io.RawSource
 import kotlin.reflect.KProperty
 
 // TODO LATER speed up w/ coroutines
-
-/**
- * Thrown when a [parser definition][parser] is malformed.
- */
-public class MalformedParserException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
     // Iterative to save memory
@@ -157,7 +152,7 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
     internal val listeners = def.listeners
 
     private val start = resolveSymbols(parserSymbols, def)
-    private val skip = if (def.skipDelegate.isInitialized()) def.skip else null
+    private val skip = def.skipDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
@@ -240,12 +235,14 @@ public sealed interface Lexer {
  * A parser that tokenizes its input before parsing.
  */
 public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
+    private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
+
     internal val parserSymbols = HashMap<String, NameableSymbol<*>>(def.parserSymbols.size + def.implicitSymbols.size)
     internal val listeners = def.listeners
 
-    private val start = resolveSymbols(parserSymbols, def)
-    private val skip = def.skip.toImmutableList()
     private val lexerSymbols = def.lexerSymbols
+    private val start = resolveSymbols(parserSymbols, def)
+    private val recovery = def.recoveryDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy {
         HashMap<String, NameableSymbol<*>>(parserSymbols.size + lexerSymbols.size).apply {
@@ -254,19 +251,43 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = start.match(ParserMetadata(input, skip))
-    final override fun parse(input: RawSource): Node<*>? = start.match(ParserMetadata(input, skip))
+    final override fun parse(input: String): Node<*>? = parse(StringInputStream(input))
+    final override fun parse(input: RawSource): Node<*>? = parse(SourceInputStream(input))
+    final override fun tokenize(input: String): List<Token> = tokenize(StringInputStream(input))
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourceInputStream(input))
 
-    final override fun tokenize(input: String): List<Token> {
-        lexer
-    }
+    private fun parse(input: InputStream): Node<*>? {
+        val tokens = tokenize(input)
 
-    final override fun tokenize(input: RawSource): List<Token> {
-        TODO("Not yet implemented")
     }
 
     private fun tokenize(input: InputStream): List<Token> {
-
+        val metadata = ParserMetadata(input)
+        val tokens = mutableListOf<Token>()
+        var inRecovery = false
+        var recoveryIndex = 0
+        while (input.hasNext()) {
+            val tokenNode = lexerSymbols.asSequence().mapNotNull { it.match(metadata) }.firstOrNull()
+            if (tokenNode == null) { // Attempt error recovery
+                if (!inRecovery) {
+                    inRecovery = true
+                    recoveryIndex = tokens.size
+                }
+                val recoveryNode = recovery?.match(metadata)?.takeIf { it.substring.isNotEmpty() }
+                tokens += Token("", recoveryNode?.substring ?: throw IllegalTokenException(tokens))
+            } else {    // Successfully matched to named lexer symbol
+                if (inRecovery) {
+                    val recoveryTokens = tokens.subList(recoveryIndex, tokens.lastIndex)
+                    val concatenated = Token("", recoveryTokens.asSequence().map { it.substring }.joinToString(""))
+                    recoveryTokens.clear()
+                    tokens += concatenated
+                }
+                if (tokenNode.toString() in skip) {
+                    continue
+                }
+            }
+        }
+        return tokens.toList()  // Defensive copy
     }
 }
 

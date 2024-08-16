@@ -22,7 +22,7 @@ public open class Node<MatchT : Symbol> internal constructor(
     /**
      * The children of this node as the root of an abstract syntax tree.
      */
-    public open val children: List<Node<*>> = persistentListOf()
+    public open val children: List<Node<*>> = persistentListOf()    // Empty for leaf nodes
 
     /**
      * The name assigned to this symbol, or null if one does not exist.

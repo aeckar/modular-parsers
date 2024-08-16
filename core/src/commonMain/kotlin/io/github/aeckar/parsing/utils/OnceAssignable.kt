@@ -6,14 +6,14 @@ import kotlin.reflect.KProperty
  * A delegate ensuring that a property is only assigned a value once.
  */
 public class OnceAssignable<FieldT : Any, ExceptionT : Throwable>(throws: (String) -> ExceptionT) {
+    /**
+     * The backing field of this delegate.
+     */
+    public var field: FieldT? = null
+        private set
+
     private val raise = throws
     private lateinit var name: String
-    private var field: FieldT? = null
-
-    /**
-     * Returns true if the delegated property has been given a value.
-     */
-    public fun isInitialized(): Boolean = field != null
 
     /**
      * Assigns the name of the property to this delegate.

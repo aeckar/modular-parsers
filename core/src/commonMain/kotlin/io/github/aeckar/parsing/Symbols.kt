@@ -50,7 +50,7 @@ public class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
 ) : Symbol(), Named {
     override val rawName: String get() = name
 
-    override fun match(data: ParserMetadata): Node<*>? = unnamed.match(data)
+    override fun match(metadata: ParserMetadata): Node<*>? = unnamed.match(metadata)
     override fun toString(): String = name
 }
 

@@ -1,5 +1,6 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.utils.OnceAssignable
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
@@ -7,12 +8,26 @@ import kotlin.reflect.KProperty
  * Defines a scope where a [LexerParser] can be defined.
  */
 public sealed class LexerParserDefinition : ParserDefinition() {
+    internal val recoveryDelegate = OnceAssignable<Symbol, _>(::MalformedParserException)
+
+    /**
+     * During [tokenization][Lexer.tokenize], if a sequence of characters cannot be matched to a named [LexerSymbol],
+     * any adjacent substrings matching this symbol that do not match a named lexer symbol
+     * are combined into a single unnamed token.
+     *
+     * If left unspecified and a match cannot be made to a named lexer symbol, an [IllegalTokenException] is thrown.
+     * This exception is also thrown if a match to this symbol produces a token of an empty substring
+     * (e.g., if this is an [Option]).
+     */
+    public val recovery: Symbol by recoveryDelegate
+
     /**
      * The lexer symbols to be ignored during lexical analysis.
      *
      * Nodes produced by these symbols will not be present in the list returned by [LexerParser.tokenize].
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
+
 
     internal val lexerSymbols = mutableListOf<NamedSymbol<LexerSymbol>>()
 
