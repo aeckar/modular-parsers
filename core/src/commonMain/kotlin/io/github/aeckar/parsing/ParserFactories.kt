@@ -1,4 +1,3 @@
-@file:OptIn(ExperimentalContracts::class)
 package io.github.aeckar.parsing
 
 import kotlin.contracts.ExperimentalContracts
@@ -9,6 +8,7 @@ import kotlin.contracts.contract
  * Creates a new [LexerlessParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
+@OptIn(ExperimentalContracts::class)
 public fun parser(definition: NullaryLexerlessParserDefinition.() -> Unit): NullaryLexerlessParser {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
     return NullaryLexerlessParser(NullaryLexerlessParserDefinition().apply(definition))
@@ -21,6 +21,7 @@ public fun parser(definition: NullaryLexerlessParserDefinition.() -> Unit): Null
  * [init][UnaryLexerlessParserDefinition.init] block and symbol [listeners][UnaryLexerlessParserDefinition.listener].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
+@OptIn(ExperimentalContracts::class)
 public fun <ArgumentT> parser(
     definition: UnaryLexerlessParserDefinition<ArgumentT>.() -> Unit
 ): UnaryLexerlessParser<ArgumentT> {
@@ -32,6 +33,7 @@ public fun <ArgumentT> parser(
  * Creates a new [LexerParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
+@OptIn(ExperimentalContracts::class)
 public fun lexerParser(definition: NullaryLexerParserDefinition.() -> Unit): NullaryLexerParser {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
     return NullaryLexerParser(NullaryLexerParserDefinition().apply(definition))
@@ -44,6 +46,7 @@ public fun lexerParser(definition: NullaryLexerParserDefinition.() -> Unit): Nul
  * [init][UnaryLexerParserDefinition.init] block and symbol [listeners][UnaryLexerParserDefinition.listener].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
+@OptIn(ExperimentalContracts::class)
 public fun <ArgumentT> lexerParser(
     definition: UnaryLexerParserDefinition<ArgumentT>.() -> Unit
 ): UnaryLexerParser<ArgumentT> {

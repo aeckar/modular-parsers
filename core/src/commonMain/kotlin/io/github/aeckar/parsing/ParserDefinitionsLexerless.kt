@@ -16,6 +16,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      * The symbol whose matches are discarded during parsing.
      *
      * Whenever a successful match is made, whatever is then matched to this symbol is ignored.
+     * @throws MalformedParserException this property is assigned a value more than once
      */
     public var skip: Symbol by skipDelegate
 

@@ -18,6 +18,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      * If left unspecified and a match cannot be made to a named lexer symbol, an [IllegalTokenException] is thrown.
      * This exception is also thrown if a match to this symbol produces a token of an empty substring
      * (e.g., if this is an [Option]).
+     * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
     public val recovery: Symbol by recoveryDelegate
 
@@ -25,6 +26,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      * The lexer symbols to be ignored during lexical analysis.
      *
      * Nodes produced by these symbols will not be present in the list returned by [LexerParser.tokenize].
+     * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
 

@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.utils.SymbolStream
+
 /**
  * Can be combined with other fragments to create a [LexerSymbol].
  */
@@ -13,5 +15,5 @@ public class SymbolFragment internal constructor(
      */
     internal val rawName = root.rawName
 
-    internal fun lex(data: ParserMetadata) = root.match(data)?.substring
+    internal fun lex(data: SymbolStream) = root.match(data)?.substring
 }

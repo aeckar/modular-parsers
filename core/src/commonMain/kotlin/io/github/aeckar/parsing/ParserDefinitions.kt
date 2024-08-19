@@ -26,6 +26,10 @@ internal val ParserDefinition.listeners get() = when (this) {
 public sealed class ParserDefinition {
     /**
      * The principal symbol to be matched.
+     *
+     * Leaving this property unassigned will not throw an exception for lexer-parsers,
+     * except in the event that [Parser.parse] is invoked.
+     * @throws MalformedParserException this property is left unassigned or is assigned a value more than once
      */
     public var start: Symbol by OnceAssignable(throws = ::MalformedParserException)
 
@@ -82,6 +86,8 @@ public sealed class ParserDefinition {
 
     /**
      * Assigns a name to this symbol.
+     *
+     * Doing this for multiple named symbols is legal.
      */
     public operator fun <S : NameableSymbol<S>> NameableSymbol<S>.getValue(
         thisRef: Any?,
@@ -253,26 +259,6 @@ public sealed class ParserDefinition {
 
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
         return Sequence2(Sequence(query1, query2).unsafeCast())
-    }
-
-    public companion object {
-        /**
-         * A symbol matching any single character.
-         */
-        public val CHARACTER: Symbol by lazy {
-            val field: Symbol
-            parser { field = of("-") }
-            field
-        }
-
-        /**
-         * A symbol matching all characters up to, and including, a newline (`'\n'`) character.
-         */
-        public val LINE: Symbol by lazy {
-            val field: Symbol
-            parser { field = multipleOf("-\n-") + '\n' }
-            field
-        }
     }
 }
 

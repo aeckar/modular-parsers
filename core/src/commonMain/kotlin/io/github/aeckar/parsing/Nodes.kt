@@ -4,8 +4,14 @@ import io.github.aeckar.parsing.typesafe.JunctionNode
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 
 // Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
+
+/**
+ * Returns the concatenation of the substrings of all elements in this list.
+ */
+internal fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
 
 /**
  * A matched substring in a given input produced according to the matching logic of a symbol.
@@ -16,7 +22,7 @@ import kotlinx.collections.immutable.persistentListOf
  * performing a cast to an instance with another type parameter may break the API.
  */
 public open class Node<MatchT : Symbol> internal constructor(
-    private val source: MatchT,
+    internal var source: MatchT,
     public val substring: String
 ) {
     /**
@@ -73,8 +79,10 @@ public inline fun <SubMatchT : Symbol> Node<Option<SubMatchT>>.onSuccess(action:
 internal class RepetitionNode<SubMatchT : Symbol> internal constructor(
     symbol: Repetition<SubMatchT>,
     substring: String,
-    override val children: List<Node<SubMatchT>>
-) : Node<Repetition<SubMatchT>>(symbol, substring)
+    internal val branches: List<Node<SubMatchT>>
+) : Node<Repetition<SubMatchT>>(symbol, substring) {
+    override val children: List<Node<SubMatchT>> by lazy { branches.toImmutableList() }
+}
 
 // ------------------------------ junction nodes ------------------------------
 

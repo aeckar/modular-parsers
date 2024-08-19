@@ -60,23 +60,6 @@ private fun resolveSymbols(allSymbols: MutableMap<String, NameableSymbol<*>>, de
 
 // ------------------------------ basic parsers ------------------------------
 
-internal val Parser.parserSymbols
-    get() = if (this is LexerlessParser) parserSymbols else (this as LexerParser).parserSymbols
-
-internal val Parser.listeners get() = if (this is LexerlessParser) listeners else (this as LexerParser).listeners
-
-private fun NullaryParser.listenerStrategy(node: Node<*>) {
-    listeners[toString()]
-        ?.unsafeCast<NullaryListener<Symbol>>()
-        ?.apply { node.unsafeCast<Node<Symbol>>()() }
-}
-
-private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: ArgumentT, node: Node<*>) {
-    listeners[toString()]
-        ?.unsafeCast<UnaryListener<Symbol, ArgumentT>>()
-        ?.apply { node.unsafeCast<Node<Symbol>>()(argument) }
-}
-
 /**
  * Performs actions according to a formal grammar.
  *
@@ -100,6 +83,11 @@ public sealed interface Parser {
     public fun parse(input: RawSource): Node<*>?
 }
 
+internal val Parser.parserSymbols
+    get() = if (this is LexerlessParser) parserSymbols else (this as LexerParser).parserSymbols
+
+internal val Parser.listeners get() = if (this is LexerlessParser) listeners else (this as LexerParser).listeners
+
 /**
  * A parser given a name by delegating a [Nameable] parser to a property.
  */
@@ -108,38 +96,59 @@ public sealed interface NamedParser : Parser
 /**
  * A parser that does not take an argument.
  */
-public sealed interface NullaryParser : Parser {
-    /**
-     * Invokes the listeners of this parser on the nodes of a
-     * completed [abstract syntax tree][parse] representing the given input.
-     *
-     * @return the root node of the resulting AST
-     */
-    public operator fun invoke(input: String): Node<*>?
+public sealed interface NullaryParser : Parser
 
-    /**
-     * See [NullaryParser.invoke] for details.
-     */
-    public operator fun invoke(input: RawSource): Node<*>?
+/**
+ * Invokes the listeners of this parser on the nodes of a
+ * completed [abstract syntax tree][Parser.parse] representing the given input.
+ *
+ * @return the root node of the resulting AST
+ */
+public operator fun NullaryParser.invoke(input: String): Node<*>? = parse(input)?.walk(::listenerStrategy)
+
+/**
+ * See [NullaryParser.invoke] for details.
+ */
+public operator fun NullaryParser.invoke(input: RawSource): Node<*>? = parse(input)?.walk(::listenerStrategy)
+
+private fun NullaryParser.listenerStrategy(node: Node<*>) {
+    listeners[toString()]
+        ?.unsafeCast<NullaryListener<Symbol>>()
+        ?.apply { node.unsafeCast<Node<Symbol>>()() }
 }
 
 /**
  * A parser that takes one argument.
  */
-public sealed interface UnaryParser<ArgumentT> : Parser {
-    /**
-     * Invokes the listeners of this parser on the nodes of a
-     * completed [abstract syntax tree][parse] representing the given input.
-     *
-     * The argument passed to this function is also passed to each listener.
-     * @return the root node of the resulting AST
-     */
-    public operator fun invoke(argument: ArgumentT, input: String): Node<*>?
+public sealed interface UnaryParser<ArgumentT> : Parser
 
-    /**
-     * See [UnaryParser.invoke] for details.
-     */
-    public operator fun invoke(argument: ArgumentT, input: RawSource): Node<*>?
+/**
+ * Invokes the listeners of this parser on the nodes of a
+ * completed [abstract syntax tree][Parser.parse] representing the given input.
+ *
+ * The argument passed to this function is also passed to each listener.
+ * @return the root node of the resulting AST
+ */
+public fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): Node<*>? {
+    initializer?.let { it(argument) }
+    return parse(input)?.walk { listenerStrategy(argument, it) }
+}
+
+/**
+ * See [UnaryParser.invoke] for details.
+ */
+public fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): Node<*>? {
+    initializer?.let { it(argument) }
+    return parse(input)?.walk { listenerStrategy(argument, it) }
+}
+
+private val <ArgumentT> UnaryParser<ArgumentT>.initializer get() =
+    if (this is UnaryLexerlessParser<ArgumentT>) initializer else (this as UnaryLexerParser<ArgumentT>).initializer
+
+private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: ArgumentT, node: Node<*>) {
+    listeners[toString()]
+        ?.unsafeCast<UnaryListener<Symbol, ArgumentT>>()
+        ?.apply { node.unsafeCast<Node<Symbol>>()(argument) }
 }
 
 // ------------------------------ lexerless parsers ------------------------------
@@ -156,8 +165,8 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
-    final override fun parse(input: String): Node<*>? = start.match(ParserMetadata(input, skip))
-    final override fun parse(input: RawSource): Node<*>? = start.match(ParserMetadata(input, skip))
+    final override fun parse(input: String): Node<*>? = start.match(SymbolStream(input, skip))
+    final override fun parse(input: RawSource): Node<*>? = start.match(SymbolStream(input, skip))
 }
 
 /**
@@ -166,9 +175,6 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
 ) : LexerlessParser(def), Nameable, NullaryParser {
-    override fun invoke(input: String): Node<*>? = parse(input)?.walk(::listenerStrategy)
-    override fun invoke(input: RawSource): Node<*>? = parse(input)?.walk(::listenerStrategy)
-
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerlessParser {
         return NamedNullaryLexerlessParser(property.name, this)
     }
@@ -189,17 +195,7 @@ public class NamedNullaryLexerlessParser internal constructor(
 public class UnaryLexerlessParser<ArgumentT> internal constructor(
     def: UnaryLexerlessParserDefinition<ArgumentT>
 ) : LexerlessParser(def), Nameable, UnaryParser<ArgumentT> {
-    private val initializer = def.initializer
-
-    override fun invoke(argument: ArgumentT, input: String): Node<*>? {
-        initializer?.let { it(argument) }
-        return parse(input)?.walk { listenerStrategy(argument, it) }
-    }
-
-    override fun invoke(argument: ArgumentT, input: RawSource): Node<*>? {
-        initializer?.let { it(argument) }
-        return parse(input)?.walk { listenerStrategy(argument, it) }
-    }
+    internal val initializer = def.initializer
 
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerlessParser<ArgumentT> {
         return NamedUnaryLexerlessParser(property.name, this)
@@ -251,18 +247,17 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = parse(StringInputStream(input))
-    final override fun parse(input: RawSource): Node<*>? = parse(SourceInputStream(input))
-    final override fun tokenize(input: String): List<Token> = tokenize(StringInputStream(input))
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourceInputStream(input))
+    final override fun parse(input: String): Node<*>? = parse(StringCharStream(input))
+    final override fun parse(input: RawSource): Node<*>? = parse(SourceCharStream(input))
 
-    private fun parse(input: InputStream): Node<*>? {
-        val tokens = tokenize(input)
+    // Defensive copy
+    final override fun tokenize(input: String): List<Token> = tokenize(StringCharStream(input)).toList()
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourceCharStream(input)).toList()
 
-    }
+    private fun parse(input: CharStream) = start.match(SymbolStream(TokenStream(tokenize(input))))
 
-    private fun tokenize(input: InputStream): List<Token> {
-        val metadata = ParserMetadata(input)
+    private fun tokenize(input: CharStream): List<Token> {
+        val metadata = SymbolStream(input)
         val tokens = mutableListOf<Token>()
         var inRecovery = false
         var recoveryIndex = 0
@@ -287,7 +282,7 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
                 }
             }
         }
-        return tokens.toList()  // Defensive copy
+        return tokens
     }
 }
 
@@ -296,8 +291,10 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
  */
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
-) : Nameable, NullaryParser, Lexer {
-
+) : LexerParser(def), Nameable, NullaryParser, Lexer {
+    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerParser {
+        return NamedNullaryLexerParser(property.name, this)
+    }
 }
 
 /**
@@ -313,8 +310,12 @@ public class NamedNullaryLexerParser internal constructor(
  */
 public class UnaryLexerParser<ArgumentT> internal constructor(
     def: UnaryLexerParserDefinition<ArgumentT>
-) : Nameable, UnaryParser<ArgumentT>, Lexer {
+) : LexerParser(def), Nameable, UnaryParser<ArgumentT>, Lexer {
+    internal val initializer = def.base.initializer
 
+    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerParser<ArgumentT> {
+        return NamedUnaryLexerParser(property.name, this)
+    }
 }
 
 /**
