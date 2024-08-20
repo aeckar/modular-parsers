@@ -5,6 +5,7 @@ import io.github.aeckar.parsing.typesafe.TypeSafeJunction
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlin.jvm.JvmName
 
 // Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
 
@@ -89,9 +90,11 @@ internal class RepetitionNode<SubMatchT : Symbol> internal constructor(
 /**
  * The index of the option matched by the symbol emitting this token.
  */
+@get:JvmName("matchOrdinal\$ImplicitJunction")
 public val Node<out ImplicitJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
 
 /**
  * The index of the option matched by the symbol emitting this token.
  */
+@get:JvmName("matchOrdinal\$TypeSafeJunction")
 public val Node<TypeSafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal

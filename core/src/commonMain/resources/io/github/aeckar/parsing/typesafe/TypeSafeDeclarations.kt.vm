@@ -14,7 +14,7 @@ import kotlinx.collections.immutable.toImmutableList
 
 import io.github.aeckar.parsing.Symbol
 import io.github.aeckar.parsing.Node
-import io.github.aeckar.parsing.$identifier
+import io.github.aeckar.parsing.Implicit$identifier
 import io.github.aeckar.parsing.Text
 import io.github.aeckar.parsing.utils.unsafeCast
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
@@ -23,7 +23,7 @@ import io.github.aeckar.parsing.utils.fragileUnsafeCast
 * A #if($identifier == "Junction")junction#else#evaluate("sequence")#end with $n components.
 */
 public class $identifier$n<#classTypeArguments("E" " : Symbol")> internal constructor(
-    untyped: $identifier<$identifier$n<#typeArguments("E" "")>>
+    untyped: Implicit$identifier<$identifier$n<#typeArguments("E" "")>>
 ) : TypeSafe$identifier<$identifier$n<#typeArguments("E" "")>>(untyped)#if($n != $typeSafeCount)#if($identifier == "Junction") {
     /**
      * Adds the text as an option in this junction.
