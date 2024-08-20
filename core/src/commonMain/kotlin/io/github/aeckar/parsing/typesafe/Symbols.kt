@@ -24,22 +24,22 @@ public abstract class TypeSafeSymbol<
 }
 
 /**
- * A type-safe [Junction] wrapper.
+ * A type-safe junction wrapper.
  */
 public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>> internal constructor(
-    untyped: Junction<InheritorT>
-) : TypeSafeSymbol<Junction<InheritorT>, InheritorT>(untyped) {
+    untyped: ImplicitJunction<InheritorT>
+) : TypeSafeSymbol<ImplicitJunction<InheritorT>, InheritorT>(untyped) {
     init {
         untyped.typed = this
     }
 }
 
 /**
- * A type-safe [Sequence] wrapper.
+ * A type-safe sequence wrapper.
  */
 public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>> internal constructor(
-    untyped: Sequence<InheritorT>
-) : TypeSafeSymbol<Sequence<InheritorT>, InheritorT>(untyped) {
+    untyped: ImplicitSequence<InheritorT>
+) : TypeSafeSymbol<ImplicitSequence<InheritorT>, InheritorT>(untyped) {
     init {
         untyped.typed = this
     }

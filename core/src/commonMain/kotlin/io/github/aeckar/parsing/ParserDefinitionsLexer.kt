@@ -55,11 +55,6 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public final override fun text(query: String): SymbolFragment = SymbolFragment(Text(query))
 
-    /**
-     * Returns a [character switch][Switch] fragment.
-     *
-     * Should be preferred over a [Junction][or] of [Text] fragments each with a single character.
-     */
     public final override fun of(switch: String): SymbolFragment = SymbolFragment(super.of(switch).unsafeCast())
 
     // ------------------------------ options ------------------------------
@@ -131,83 +126,83 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     // ------------------------------ junctions ------------------------------
 
     /**
-     * Returns a [Junction] of the two fragments.
+     * Returns a junction of the two fragments.
      */
     public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
-        if (root is Junction<*>) {
+        if (root is ImplicitJunction<*>) {
             root.components += other
             return this
         }
-        if (other is Junction<*>) {
+        if (other is ImplicitJunction<*>) {
             other.components += root
             return option2
         }
-        return SymbolFragment(Junction(root, other))
+        return SymbolFragment(ImplicitJunction(root, other))
     }
 
     /**
-     * Returns a [Junction] of this text and the given fragment.
+     * Returns a junction of this text and the given fragment.
      */
     public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
-        if (other is Junction<*>) {
+        if (other is ImplicitJunction<*>) {
             other.components += Text(this)
             return option2
         }
-        return SymbolFragment(Junction(Text(this), other))
+        return SymbolFragment(ImplicitJunction(Text(this), other))
     }
 
     /**
-     * Returns a [Junction] of this fragment and the given text.
+     * Returns a junction of this fragment and the given text.
      */
     public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
-        if (root is Junction<*>) {
+        if (root is ImplicitJunction<*>) {
             root.components += Text(option2)
             return this
         }
-        return SymbolFragment(Junction(Text(option2), root))
+        return SymbolFragment(ImplicitJunction(Text(option2), root))
     }
 
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a [Sequence] containing the two fragments
+     * Returns a sequence containing the two fragments
      */
     public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
-        if (root is Sequence<*>) {
+        if (root is ImplicitSequence<*>) {
             root.components += other
             return this
         }
-        if (other is Sequence<*>) {
+        if (other is ImplicitSequence<*>) {
             other.components += root
             return query2
         }
-        return SymbolFragment(Sequence(root, other))
+        return SymbolFragment(ImplicitSequence(root, other))
     }
 
     /**
-     * Returns a [Sequence] containing this text and the given fragment.
+     * Returns a sequence containing this text and the given fragment.
      */
     public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
-        if (other is Sequence<*>) {
+        if (other is ImplicitSequence<*>) {
             other.components += Text(this)
             return query2
         }
-        return SymbolFragment(Sequence(Text(this), other))
+        return SymbolFragment(ImplicitSequence(Text(this), other))
     }
 
     /**
-     * Returns a [Sequence] containing this fragment and the given text.
+     * Returns a sequence containing this fragment and the given text.
      */
     public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
-        if (root is Sequence<*>) {
+        if (root is ImplicitSequence<*>) {
             root.components += Text(query2)
             return this
         }
-        return SymbolFragment(Sequence(Text(query2), root))
+        return SymbolFragment(ImplicitSequence(Text(query2), root))
     }
 }
 

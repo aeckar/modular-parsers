@@ -111,7 +111,7 @@ public sealed class ParserDefinition {
 
     /**
      * Imports the symbol with the given name from this parser for a single use.
-     * @throws NoSuchElementException the symbol does not exist
+     * @throws NoSuchElementException the symbol is undefined
      */
     public operator fun NamedParser.get(symbolName: String): Symbol {
         return parserSymbols[symbolName]
@@ -120,10 +120,9 @@ public sealed class ParserDefinition {
 
     /**
      * Allows the importing of a symbol from another named parser.
-     *
-     * The specific type of symbol being imported may be specified by specifying a type parameter.
+     * @param UnnamedT the type of the specified symbol
      */
-    public fun <UnnamedT : NameableSymbol<UnnamedT>> NamedNullaryParser.import(
+    public fun <UnnamedT : NameableSymbol<out UnnamedT>> NamedNullaryParser.import(
     ): NullarySymbolImport<UnnamedT> {
         return NullarySymbolImport(this)
     }
@@ -131,7 +130,7 @@ public sealed class ParserDefinition {
     /**
      * See [import] for details.
      */
-    public fun <UnnamedT : NameableSymbol<UnnamedT>, ArgumentT> NamedUnaryParser<ArgumentT>.import(
+    public fun <UnnamedT : NameableSymbol<out UnnamedT>, ArgumentT> NamedUnaryParser<ArgumentT>.import(
     ): UnarySymbolImport<UnnamedT, ArgumentT> {
         return UnarySymbolImport(this)
     }
@@ -178,7 +177,7 @@ public sealed class ParserDefinition {
     /**
      * Used to import a symbol from a [NullaryParser].
      */
-    public inner class NullarySymbolImport<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
+    public inner class NullarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>> internal constructor(
         override val origin: NullaryParser
     ) : SymbolImport<NullaryForeignSymbol<UnnamedT>>() {
         override fun getValue(thisRef: Any?, property: KProperty<*>): NullaryForeignSymbol<UnnamedT> {
@@ -189,7 +188,7 @@ public sealed class ParserDefinition {
     /**
      * Used to import a symbol from a [UnaryParser].
      */
-    public inner class UnarySymbolImport<UnnamedT : NameableSymbol<UnnamedT>, ArgumentT> internal constructor(
+    public inner class UnarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>, ArgumentT> internal constructor(
         override val origin: UnaryParser<ArgumentT>
     ) : SymbolImport<UnaryForeignSymbol<UnnamedT, ArgumentT>>() {
         override fun getValue(thisRef: Any?, property: KProperty<*>): UnaryForeignSymbol<UnnamedT, ArgumentT> {
@@ -220,20 +219,27 @@ public sealed class ParserDefinition {
         }
 
     /**
-     * Returns a [Junction] that can be defined after being delegated to a property.
+     * Returns a junction that can be defined after being delegated to a property.
      *
      * Because the types of the options are erased, they cannot be accessed within listeners.
      */
-    public fun junction(): Junction<*> = Junction()
+    public fun junction(): ImplicitJunction<*> = ImplicitJunction()
 
     /**
-     * Returns a [Sequence] that can be defined after being delegated to a property.
+     * Returns a sequence that can be defined after being delegated to a property.
      *
      * Because the types of the queries are erased, they cannot be accessed within listeners.
      */
-    public fun sequence(): Sequence<*> = Sequence()
+    public fun sequence(): ImplicitSequence<*> = ImplicitSequence()
 
     // ------------------------------ text & switches ------------------------------
+
+    /**
+     * Returns the switch literal inverse to this string.
+     */
+    public operator fun String.not(): String {
+        TODO("BUUIHILOHIOHHHLUH")
+    }
 
     /**
      * Returns a [Text] symbol.
@@ -243,7 +249,12 @@ public sealed class ParserDefinition {
     /**
      * Returns a [character switch][Switch] symbol.
      *
-     * Should be preferred over a [Junction] of [text symbols][text] each with a single character.
+     * To represent `'-'` as a character, use the escape `/-`.
+     * Similarly, to represent `'/'`, the escape `//` must be used.
+     *
+     * Ranges may be inverted by invoking the [not] operator on the supplied literal.
+     *
+     * Should be preferred over a junction of [text symbols][text] each with a single character.
      */
     protected open fun of(switch: String): ParserComponent = with(SwitchStringView(switch)) {
         require(isWithinBounds()) { "Switch definition must not be empty" }
@@ -304,23 +315,23 @@ public sealed class ParserDefinition {
     // Allow type-safe junctions and sequences to be root of new junction/sequence (types are checked anyway)
 
     /**
-     * Returns a [Junction] of the two symbols.
+     * Returns a junction of the two symbols.
      */
     public infix fun <S1 : Symbol, S2 : Symbol> S1.or(option2: S2): Junction2<S1, S2> = toJunction(this, option2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
-        return Junction2(Junction(option1, option2).unsafeCast())
+        return Junction2(ImplicitJunction(option1, option2).unsafeCast())
     }
 
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a [Sequence] containing the two symbols.
+     * Returns a sequence containing the two symbols.
      */
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
-        return Sequence2(Sequence(query1, query2).unsafeCast())
+        return Sequence2(ImplicitSequence(query1, query2).unsafeCast())
     }
 }
 
@@ -333,7 +344,7 @@ public sealed interface NullaryParserDefinition {
      *
      * Whenever a match is made to this symbol, the listener is invoked.
      */
-    public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>)
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: NullaryListener<MatchT>)
 
     /**
      * Assigns the supplied listener to the symbol.
@@ -341,7 +352,7 @@ public sealed interface NullaryParserDefinition {
      * Whenever a match is made to this symbol,
      * the listener previously defined for this symbol is invoked before this one is.
      */
-    public infix fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: NullaryListener<MatchT>
     )
 }
@@ -355,7 +366,7 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      *
      * Whenever a match is made to this symbol, the listener is invoked.
      */
-    public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: UnaryListener<MatchT, ArgumentT>
     )
 
@@ -365,7 +376,7 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      * Whenever a match is made to this symbol,
      * the listener previously defined for this symbol is invoked before this one is.
      */
-    public infix fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: UnaryListener<MatchT, ArgumentT>
     )
 

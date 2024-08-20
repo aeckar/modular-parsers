@@ -1,13 +1,13 @@
 package io.github.aeckar.parsing.typesafe
 
-import io.github.aeckar.parsing.Junction
-import io.github.aeckar.parsing.Sequence
+import io.github.aeckar.parsing.ImplicitJunction
+import io.github.aeckar.parsing.ImplicitSequence
 import io.github.aeckar.parsing.Node
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 
 /**
- * A node emitted by a [Junction].
+ * A node emitted by a junction.
  */
 @PublishedApi
 internal class JunctionNode(
@@ -20,7 +20,7 @@ internal class JunctionNode(
 }
 
 /**
- * A node emitted by a [Sequence].
+ * A node emitted by a sequence.
  */
 @PublishedApi
 internal class SequenceNode(

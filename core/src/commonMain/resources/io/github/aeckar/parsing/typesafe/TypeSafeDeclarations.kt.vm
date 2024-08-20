@@ -20,7 +20,7 @@ import io.github.aeckar.parsing.utils.unsafeCast
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
 /**
-* A [$identifier] with $n components.
+* A #if($identifier == "Junction")junction#else#evaluate("sequence")#end with $n components.
 */
 public class $identifier$n<#classTypeArguments("E" " : Symbol")> internal constructor(
     untyped: $identifier<$identifier$n<#typeArguments("E" "")>>

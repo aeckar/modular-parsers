@@ -64,9 +64,9 @@ public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> in
 /**
  * A symbol given a name by being delegated to a property.
  */
-public open class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
+public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal constructor(
     override val name: String,
-    internal var unnamed: NameableSymbol<UnnamedT>
+    internal var unnamed: NameableSymbol<out UnnamedT>
 ) : Symbol(), Named {
     final override val rawName: String get() = name
 
@@ -82,8 +82,8 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>> internal cons
 /**
  * A symbol [imported][ParserDefinition.import] from another parser.
  */
-public sealed class ForeignSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
-    base: NamedSymbol<UnnamedT>,
+public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
+    base: NamedSymbol<out UnnamedT>,
 ) : NamedSymbol<UnnamedT>(base.name, base.unnamed) {
     internal abstract val origin: Parser
 }
@@ -91,16 +91,16 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
 /**
  * A foreign symbol originating from a [NullaryParser].
  */
-public class NullaryForeignSymbol<UnnamedT: NameableSymbol<UnnamedT>> internal constructor(
-    base: NamedSymbol<UnnamedT>,
+public class NullaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>> internal constructor(
+    base: NamedSymbol<out UnnamedT>,
     override val origin: NullaryParser
 ) : ForeignSymbol<UnnamedT>(base)
 
 /**
  * A foreign symbol originating from a [UnaryParser].
  */
-public class UnaryForeignSymbol<UnnamedT: NameableSymbol<UnnamedT>, ArgumentT> internal constructor(
-    base: NamedSymbol<UnnamedT>,
+public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, ArgumentT> internal constructor(
+    base: NamedSymbol<out UnnamedT>,
     override val origin: UnaryParser<ArgumentT>
 ) : ForeignSymbol<UnnamedT>(base)
 
@@ -239,8 +239,8 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSym
 /**
  * A symbol matching one of several possible other symbols.
  */
-public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal constructor(
-) : TypeUnsafeSymbol<TypeSafeT, Junction<TypeSafeT>>() {
+public class ImplicitJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal constructor(
+) : TypeUnsafeSymbol<TypeSafeT, ImplicitJunction<TypeSafeT>>() {
     internal lateinit var typed: TypeSafeJunction<*>
 
     internal constructor(option1: Symbol, option2: Symbol) : this() {
@@ -267,8 +267,8 @@ public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal construc
 /**
  * A symbol matching multiple symbols in a certain order.
  */
-public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal constructor(
-) : TypeUnsafeSymbol<TypeSafeT, Sequence<TypeSafeT>>() {
+public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal constructor(
+) : TypeUnsafeSymbol<TypeSafeT, ImplicitSequence<TypeSafeT>>() {
     internal lateinit var typed: TypeSafeSequence<*>
 
     internal constructor(query1: Symbol, query2: Symbol) : this() {
@@ -279,7 +279,7 @@ public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal construc
     override fun match(stream: SymbolStream) = pivot(stream) {
         val components = components.iterator()
         val first = components.next().resolve()
-        if (first !is Junction<*> && first in recursions) { // Infinite recursion check
+        if (first !is ImplicitJunction<*> && first in recursions) { // Infinite recursion check
             removeSavedPosition()
             return@pivot null
         }
@@ -320,7 +320,7 @@ public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal construc
         /**
          * Matches all characters up to, and including, a newline (`'\n'`) character.
          */
-        public val LINE: Sequence<*> = Sequence().apply {
+        public val LINE: ImplicitSequence<*> = ImplicitSequence().apply {
             val ranges = listOf(Char.MIN_VALUE..'\u0009', '\u000b'..Char.MAX_VALUE)
             components += Repetition(Switch("-\u0009\u000b-", ranges))
             components += Text("\n")

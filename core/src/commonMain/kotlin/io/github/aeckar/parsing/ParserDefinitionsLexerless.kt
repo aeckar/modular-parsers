@@ -34,11 +34,6 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public final override fun text(query: String): Text = super.text(query).unsafeCast()
 
-    /**
-     * Returns a [character switch][Switch] symbol.
-     *
-     * Should be preferred over a [Junction][or] of [text symbols][text] each with a single character.
-     */
     public final override fun of(switch: String): Switch = super.of(switch).unsafeCast()
 
     // ------------------------------ options ------------------------------
@@ -95,24 +90,24 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
     // ------------------------------ junctions ------------------------------
 
     /**
-     * Returns a [Junction] of this text and the given symbol.
+     * Returns a junction of this text and the given symbol.
      */
     public infix fun <S2 : Symbol> Char.or(option2: S2): Junction2<Text, S2> = toJunction(Text(this), option2)
 
     /**
-     * Returns a [Junction] of this symbol and the given text.
+     * Returns a junction of this symbol and the given text.
      */
     public infix fun <S1 : Symbol> S1.or(option2: Char): Junction2<S1, Text> = toJunction(this, Text(option2))
 
     // ------------------------------ sequences ------------------------------
 
     /**
-     * Returns a [Sequence] containing this text and the given symbol.
+     * Returns a sequence containing this text and the given symbol.
      */
     public operator fun <S2 : Symbol> Char.plus(query2: S2): Sequence2<Text, S2> = toSequence(Text(this), query2)
 
     /**
-     * Returns a [Sequence] containing this symbol and the given text.
+     * Returns a sequence containing this symbol and the given text.
      */
     public operator fun <S1 : Symbol> S1.plus(query2: Char): Sequence2<S1, Text> = toSequence(this, Text(query2))
 }
@@ -127,12 +122,14 @@ public class NullaryLexerlessParserDefinition internal constructor(
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
-    override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>) {
+    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: NullaryListener<MatchT>
+    ) {
         ensureUndefinedListener(name)
         listeners[name] = action
     }
 
-    override fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: NullaryListener<MatchT>
     ) {
         origin.ensureExtensionCandidate(name)
@@ -157,14 +154,14 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
-    override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
+    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: UnaryListener<MatchT, ArgumentT>
     ) {
         ensureUndefinedListener(name)
         listeners[name] = action
     }
 
-    override fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: UnaryListener<MatchT, ArgumentT>
     ) {
         origin.ensureExtensionCandidate(name)
