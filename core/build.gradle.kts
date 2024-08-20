@@ -5,8 +5,6 @@ import org.apache.velocity.runtime.resource.loader.FileResourceLoader
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// TODO LATER change names
-
 val ordinals = listOf(
     "first",    "second",
     "third",    "fourth",

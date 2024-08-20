@@ -30,7 +30,6 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
 
-
     internal val lexerSymbols = mutableListOf<NamedSymbol<LexerSymbol>>()
 
     // ------------------------------ symbol definition ------------------------------

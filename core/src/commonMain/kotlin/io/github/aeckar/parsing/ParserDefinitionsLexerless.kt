@@ -10,7 +10,7 @@ import kotlin.reflect.KProperty
  * Defines a scope where a [Parser] without a lexer can be defined.
  */
 public sealed class LexerlessParserDefinition : ParserDefinition() {
-    internal var skipDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
+    internal val skipDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
 
     /**
      * The symbol whose matches are discarded during parsing.
@@ -128,10 +128,20 @@ public class NullaryLexerlessParserDefinition internal constructor(
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
     override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>) {
-        if (name in listeners) {
-            raiseAmbiguousListener(name)
-        }
+        ensureUndefinedListener(name)
         listeners[name] = action
+    }
+
+    override fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+        action: NullaryListener<MatchT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = NullaryListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullaryListener<MatchT>>()) {
+                this@NullaryListener()
+            }
+            with(action) { this@NullaryListener() }
+        }
     }
 }
 
@@ -150,11 +160,34 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
     override fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
         action: UnaryListener<MatchT, ArgumentT>
     ) {
-        if (name in listeners) {
-            raiseAmbiguousListener(name)
-        }
+        ensureUndefinedListener(name)
         listeners[name] = action
     }
+
+    override fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+        action: UnaryListener<MatchT, ArgumentT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = UnaryListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullaryListener<MatchT>>()) {
+                this@UnaryListener()
+            }
+            with(action) { this@UnaryListener(it) }
+        }
+    }
+
+    override fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
+        action: UnaryListener<MatchT, ArgumentT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = UnaryListener {
+            with(origin.listeners.getValue(name).unsafeCast<UnaryListener<MatchT, in ArgumentT>>()) {
+                this@UnaryListener(it)
+            }
+            with(action) { this@UnaryListener(it) }
+        }
+    }
+
     /**
      * Describes the initialization logic of arguments supplied to this parser.
      */

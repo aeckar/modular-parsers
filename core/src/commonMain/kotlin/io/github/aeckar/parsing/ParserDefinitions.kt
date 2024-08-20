@@ -24,6 +24,8 @@ internal val ParserDefinition.listeners get() = when (this) {
  * Each listener is invoked from a completed [abstract syntax tree][Parser.parse] in a top-down, left-to-right fashion.
  */
 public sealed class ParserDefinition {
+    internal val startDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
+
     /**
      * The principal symbol to be matched.
      *
@@ -31,13 +33,18 @@ public sealed class ParserDefinition {
      * except in the event that [Parser.parse] is invoked.
      * @throws MalformedParserException this property is left unassigned or is assigned a value more than once
      */
-    public var start: Symbol by OnceAssignable(throws = ::MalformedParserException)
+    public var start: Symbol by startDelegate
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
     internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
 
-    protected fun raiseAmbiguousListener(name: String): Nothing {
-        throw MalformedParserException("Listener for symbol '$name' defined more than once'")
+    /**
+     * @throws MalformedParserException the assertion fails
+     */
+    protected fun ensureUndefinedListener(name: String) {
+        if (name in listeners) {
+            throw MalformedParserException("Listener for symbol '$name' defined more than once")
+        }
     }
 
     /**
@@ -99,14 +106,35 @@ public sealed class ParserDefinition {
         } else {
             parserSymbols[name] = this
         }
-        return NamedSymbol(name, this.unsafeCast())
+        return NamedSymbol(name, this)
+    }
+
+    /**
+     * Imports the symbol with the given name from this parser for a single use.
+     * @throws NoSuchElementException the symbol does not exist
+     */
+    public operator fun NamedParser.get(symbolName: String): Symbol {
+        return parserSymbols[symbolName]
+            ?: throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
     }
 
     /**
      * Allows the importing of a symbol from another named parser.
+     *
+     * The specific type of symbol being imported may be specified by specifying a type parameter.
      */
-    public fun <NameableT : NameableSymbol<NameableT>>
-    NamedParser.import(): SymbolImport<NameableT> = SymbolImport(this)
+    public fun <UnnamedT : NameableSymbol<UnnamedT>> NamedNullaryParser.import(
+    ): NullarySymbolImport<UnnamedT> {
+        return NullarySymbolImport(this)
+    }
+
+    /**
+     * See [import] for details.
+     */
+    public fun <UnnamedT : NameableSymbol<UnnamedT>, ArgumentT> NamedUnaryParser<ArgumentT>.import(
+    ): UnarySymbolImport<UnnamedT, ArgumentT> {
+        return UnarySymbolImport(this)
+    }
 
     /**
      * Delegating an instance of this class to a property assigns it the
@@ -114,24 +142,58 @@ public sealed class ParserDefinition {
      *
      * If the symbol is not defined in the parser, a [MalformedParserException] will be thrown upon delegation.
      */
-    public inner class SymbolImport<NameableT : NameableSymbol<NameableT>> internal constructor(
-        private val from: NamedParser
-    ) : Nameable {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): NamedSymbol<NameableT> {
-            val name = property.name
+    public abstract inner class SymbolImport<ForeignT : ForeignSymbol<*>> : Nameable {
+        internal abstract val origin: Parser
+
+        abstract override fun getValue(thisRef: Any?, property: KProperty<*>): ForeignT
+
+        protected fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                from.parserSymbols.getValue(name)
+                origin.parserSymbols.getValue(name)
             } catch (e: NoSuchElementException) {
-                throw MalformedParserException("Symbol '$name' is not defined in parser '$from'", e)
+                throw MalformedParserException("Symbol '$name' is not defined in parser '$origin'", e)
             }
             parserSymbols[name] = symbol
             return try {
-                NamedSymbol(name, symbol.unsafeCast())
+                NamedSymbol(name, symbol)
             } catch (e: ClassCastException) {
                 throw MalformedParserException(
                     "Symbol '$name' of type ${symbol::class.simpleName} cannot be " +
-                    "cast to the type parameter specified by the import statement", e)
+                    "cast to type specified by import statement", e)
             }
+        }
+    }
+
+    /**
+     * Ensures that the specified extension listener can be created.
+     * @throws MalformedParserException the assertion fails
+     */
+    internal fun Parser.ensureExtensionCandidate(name: String) {
+        ensureUndefinedListener(name)
+        if (name !in listeners) {
+            throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
+        }
+    }
+
+    /**
+     * Used to import a symbol from a [NullaryParser].
+     */
+    public inner class NullarySymbolImport<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
+        override val origin: NullaryParser
+    ) : SymbolImport<NullaryForeignSymbol<UnnamedT>>() {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): NullaryForeignSymbol<UnnamedT> {
+            return NullaryForeignSymbol(resolveSymbol(property.name).unsafeCast(), origin)
+        }
+    }
+
+    /**
+     * Used to import a symbol from a [UnaryParser].
+     */
+    public inner class UnarySymbolImport<UnnamedT : NameableSymbol<UnnamedT>, ArgumentT> internal constructor(
+        override val origin: UnaryParser<ArgumentT>
+    ) : SymbolImport<UnaryForeignSymbol<UnnamedT, ArgumentT>>() {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): UnaryForeignSymbol<UnnamedT, ArgumentT> {
+            return UnaryForeignSymbol(resolveSymbol(property.name).unsafeCast(), origin)
         }
     }
 
@@ -272,6 +334,16 @@ public sealed interface NullaryParserDefinition {
      * Whenever a match is made to this symbol, the listener is invoked.
      */
     public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(action: NullaryListener<MatchT>)
+
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol,
+     * the listener previously defined for this symbol is invoked before this one is.
+     */
+    public infix fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+        action: NullaryListener<MatchT>
+    )
 }
 
 /**
@@ -284,6 +356,23 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      * Whenever a match is made to this symbol, the listener is invoked.
      */
     public infix fun <MatchT : NameableSymbol<MatchT>> NamedSymbol<MatchT>.listener(
+        action: UnaryListener<MatchT, ArgumentT>
+    )
+
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol,
+     * the listener previously defined for this symbol is invoked before this one is.
+     */
+    public infix fun <MatchT : NameableSymbol<MatchT>> NullaryForeignSymbol<MatchT>.extendsListener(
+        action: UnaryListener<MatchT, ArgumentT>
+    )
+
+    /**
+     * See [extendsListener] for details.
+     */
+    public infix fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
         action: UnaryListener<MatchT, ArgumentT>
     )
 

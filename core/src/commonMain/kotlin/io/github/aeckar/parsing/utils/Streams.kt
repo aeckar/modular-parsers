@@ -24,6 +24,9 @@ internal inline fun <ReturnT> Symbol.pivot(
     contract {
         callsInPlace(block, InvocationKind.EXACTLY_ONCE)
     }
+    if (this in stream.failCache) {
+        return null
+    }
     stream.savePosition()
     return try {
         block(stream)

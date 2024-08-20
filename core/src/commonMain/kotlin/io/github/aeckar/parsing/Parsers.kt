@@ -6,8 +6,6 @@ import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.io.RawSource
 import kotlin.reflect.KProperty
 
-// TODO LATER speed up w/ coroutines
-
 private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
     // Iterative to save memory
     fun walk(root: Node<*>) {
@@ -43,19 +41,24 @@ private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
 /**
  * Returns the start symbol.
  */
-private fun resolveSymbols(allSymbols: MutableMap<String, NameableSymbol<*>>, def: ParserDefinition): Symbol {
-    def.implicitSymbols.forEach { (name, symbol) ->
+private fun ParserDefinition.resolveSymbols(): Map<String, NameableSymbol<*>> {
+    val allSymbols = HashMap<String, NameableSymbol<*>>(parserSymbols.size + implicitSymbols.size)
+    implicitSymbols.forEach { (name, symbol) ->
         if (symbol == null) {
             throw MalformedParserException("Implicit symbol '$name' is undefined")
         }
         allSymbols[name] = symbol
     }
-    allSymbols += def.parserSymbols
-    return try {
-        def.start
-    } catch (e: RuntimeException) {
-        throw MalformedParserException("Start symbol for is undefined", e)
-    }
+    allSymbols += parserSymbols
+    return allSymbols
+}
+
+/**
+ * @throws MalformedParserException always
+ */
+private fun Parser.raiseUndefinedStart(): Nothing {
+    val name = if (this is Named) name  else ""
+    throw MalformedParserException("Start symbol for parser '$name' is undefined")
 }
 
 // ------------------------------ basic parsers ------------------------------
@@ -83,20 +86,24 @@ public sealed interface Parser {
     public fun parse(input: RawSource): Node<*>?
 }
 
-internal val Parser.parserSymbols
+internal val Parser.parserSymbols: Map<String, NameableSymbol<*>>
     get() = if (this is LexerlessParser) parserSymbols else (this as LexerParser).parserSymbols
-
 internal val Parser.listeners get() = if (this is LexerlessParser) listeners else (this as LexerParser).listeners
 
 /**
- * A parser given a name by delegating a [Nameable] parser to a property.
+ * A named parser.
  */
-public sealed interface NamedParser : Parser
+public sealed interface NamedParser : Named, Parser
 
 /**
  * A parser that does not take an argument.
  */
 public sealed interface NullaryParser : Parser
+
+/**
+ * A named nullary parser.
+ */
+public sealed interface NamedNullaryParser : NamedParser, NullaryParser
 
 /**
  * Invokes the listeners of this parser on the nodes of a
@@ -121,6 +128,11 @@ private fun NullaryParser.listenerStrategy(node: Node<*>) {
  * A parser that takes one argument.
  */
 public sealed interface UnaryParser<ArgumentT> : Parser
+
+/**
+ * A named unary parser.
+ */
+public sealed interface NamedUnaryParser<ArgumentT> : NamedParser, UnaryParser<ArgumentT>
 
 /**
  * Invokes the listeners of this parser on the nodes of a
@@ -157,16 +169,21 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: Argume
  * A parser that creates an abstract syntax tree directly from its input.
  */
 public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
-    internal val parserSymbols = HashMap<String, NameableSymbol<*>>(def.parserSymbols.size + def.implicitSymbols.size)
+    internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
 
-    private val start = resolveSymbols(parserSymbols, def)
+    private val start = def.startDelegate.field ?: raiseUndefinedStart()
     private val skip = def.skipDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
-    final override fun parse(input: String): Node<*>? = start.match(SymbolStream(input, skip))
-    final override fun parse(input: RawSource): Node<*>? = start.match(SymbolStream(input, skip))
+    final override fun parse(input: String): Node<*>? {
+        return start.match(SymbolStream(input, skip))
+    }
+
+    final override fun parse(input: RawSource): Node<*>? {
+        return start.match(SymbolStream(input, skip))
+    }
 }
 
 /**
@@ -186,7 +203,7 @@ public class NullaryLexerlessParser internal constructor(
 public class NamedNullaryLexerlessParser internal constructor(
     override val name: String,
     private val unnamed: NullaryLexerlessParser
-) : Named, NullaryParser by unnamed
+) : NamedNullaryParser, NullaryParser by unnamed
 
 /**
  * A parser that takes an argument,
@@ -208,7 +225,7 @@ public class UnaryLexerlessParser<ArgumentT> internal constructor(
 public class NamedUnaryLexerlessParser<ArgumentT> internal constructor(
     override val name: String,
     private val unnamed: UnaryLexerlessParser<ArgumentT>
-) : Named, UnaryParser<ArgumentT> by unnamed
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed
 
 // ------------------------------ lexer-parsers ------------------------------
 
@@ -233,11 +250,11 @@ public sealed interface Lexer {
 public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
 
-    internal val parserSymbols = HashMap<String, NameableSymbol<*>>(def.parserSymbols.size + def.implicitSymbols.size)
+    internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
 
     private val lexerSymbols = def.lexerSymbols
-    private val start = resolveSymbols(parserSymbols, def)
+    private val start = def.startDelegate.field
     private val recovery = def.recoveryDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy {
@@ -254,7 +271,9 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
     final override fun tokenize(input: String): List<Token> = tokenize(StringCharStream(input)).toList()
     final override fun tokenize(input: RawSource): List<Token> = tokenize(SourceCharStream(input)).toList()
 
-    private fun parse(input: CharStream) = start.match(SymbolStream(TokenStream(tokenize(input))))
+    private fun parse(input: CharStream): Node<*>? {
+        return (start ?: raiseUndefinedStart()).match(SymbolStream(TokenStream(tokenize(input))))
+    }
 
     private fun tokenize(input: CharStream): List<Token> {
         val metadata = SymbolStream(input)
@@ -303,7 +322,7 @@ public class NullaryLexerParser internal constructor(
 public class NamedNullaryLexerParser internal constructor(
     override val name: String,
     private val unnamed: NullaryLexerParser
-) : Named, NullaryParser by unnamed, Lexer by unnamed
+) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed
 
 /**
  * A [LexerParser] that takes one argument.
@@ -324,4 +343,4 @@ public class UnaryLexerParser<ArgumentT> internal constructor(
 public class NamedUnaryLexerParser<ArgumentT> internal constructor(
     override val name: String,
     private val unnamed: UnaryLexerParser<ArgumentT>
-) : Named, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed

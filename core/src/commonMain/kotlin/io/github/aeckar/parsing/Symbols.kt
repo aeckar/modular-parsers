@@ -5,14 +5,27 @@ import io.github.aeckar.parsing.typesafe.JunctionNode
 import io.github.aeckar.parsing.typesafe.SequenceNode
 import io.github.aeckar.parsing.utils.*
 
-// Symbols must be reused for lexical analysis to preserve type-safety
-
 private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)" else toString()
+
+/**
+ * Returns a string equal to this one with invisible characters expressed as their Kotlin escape character.
+ */
+private fun String.withEscapes() = buildString {
+    this@withEscapes.forEach {
+        if (it.isWhitespace() || it.isISOControl()) {
+            append("\\u${it.code.toString(16).padStart(4, '0')}")
+        } else {
+            append(it)
+        }
+    }
+}
 
 // ------------------------------ generic symbols ------------------------------
 
 /**
- * A symbol used to parse a specific kind of token in a given input.
+ * Used to parse a specific kind of token in a given input.
+ *
+ * The building block of a parser rule.
  */
 public abstract class Symbol internal constructor() : ParserComponent {
     /**
@@ -51,20 +64,45 @@ public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> in
 /**
  * A symbol given a name by being delegated to a property.
  */
-public class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
+public open class NamedSymbol<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
     override val name: String,
     internal var unnamed: NameableSymbol<UnnamedT>
 ) : Symbol(), Named {
-    override val rawName: String get() = name
+    final override val rawName: String get() = name
 
-    override fun resolve() = unnamed
+    final override fun resolve() = unnamed
 
-    override fun match(stream: SymbolStream) : Node<*>? {
+    final override fun match(stream: SymbolStream) : Node<*>? {
         return unnamed.match(stream)?.also { it.unsafeCast<Node<Symbol>>().source = this }
     }
 
-    override fun toString(): String = name
+    final override fun toString(): String = name
 }
+
+/**
+ * A symbol [imported][ParserDefinition.import] from another parser.
+ */
+public sealed class ForeignSymbol<UnnamedT : NameableSymbol<UnnamedT>>(
+    base: NamedSymbol<UnnamedT>,
+) : NamedSymbol<UnnamedT>(base.name, base.unnamed) {
+    internal abstract val origin: Parser
+}
+
+/**
+ * A foreign symbol originating from a [NullaryParser].
+ */
+public class NullaryForeignSymbol<UnnamedT: NameableSymbol<UnnamedT>> internal constructor(
+    base: NamedSymbol<UnnamedT>,
+    override val origin: NullaryParser
+) : ForeignSymbol<UnnamedT>(base)
+
+/**
+ * A foreign symbol originating from a [UnaryParser].
+ */
+public class UnaryForeignSymbol<UnnamedT: NameableSymbol<UnnamedT>, ArgumentT> internal constructor(
+    base: NamedSymbol<UnnamedT>,
+    override val origin: UnaryParser<ArgumentT>
+) : ForeignSymbol<UnnamedT>(base)
 
 /**
  * A symbol representing a symbol that is not a [TypeUnsafeSymbol].
@@ -109,21 +147,20 @@ public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<Lex
 public class Text internal constructor(private val query: String) : BasicSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
-    override fun match(stream: SymbolStream): Node<Text>? {
-        return pivot(stream) {
-            val matchExists = if (input is CharStream) {
-                query.all { it == input.next() }
-            } else {
-                this@Text.rawName == (input as TokenStream).next().name
-            }
-            stream.revertPosition()
-            takeIf { matchExists }?.let { Node(this@Text, query) }
-        }?.also {
-            stream.advancePosition(query.length, 1)
+    override fun match(stream: SymbolStream) = pivot(stream) {
+        val matchExists = if (input is CharStream) {
+            query.all { it == input.next() }
+        } else {
+            this@Text.rawName == (input as TokenStream).next().name
+        }
+        revertPosition()
+        takeIf { matchExists }?.let {
+            advancePosition(query.length, 1)
+            Node(this@Text, query)
         }
     }
 
-    override fun resolveRawName() = "\"$query\""
+    override fun resolveRawName() = "\"${query.withEscapes()}\""
 }
 
 /**
@@ -132,7 +169,7 @@ public class Text internal constructor(private val query: String) : BasicSymbol<
 public class Switch internal constructor(
     private val switch: String,
     private val ranges: List<CharRange>
-) : BasicSymbol<Switch>() { // TODO escape invisible characters in debug string
+) : BasicSymbol<Switch>() {
     override fun match(stream: SymbolStream) = pivot(stream) {
         val substring: String
         val matchExists = if (input is CharStream) {
@@ -144,14 +181,14 @@ public class Switch internal constructor(
             substring = next.substring
             this@Switch.rawName != next.name
         }
-        stream.revertPosition()
+        revertPosition()
         takeIf { matchExists }?.let {
-            stream.advancePosition(1)
+            advancePosition(1)
             Node(this@Switch, substring)
         }
     }
 
-    override fun resolveRawName() = "[$switch]"
+    override fun resolveRawName() = "[${switch.withEscapes()}]"
 
     public companion object {
         /**
@@ -175,10 +212,10 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Basi
             }
             subMatch = query.match().unsafeCast()
         }
-        stream.revertPosition()
+        revertPosition()
         takeIf { children.isNotEmpty() }?.let {
             val match = RepetitionNode(this@Repetition, children.concatenate(), children)
-            stream.advancePosition(match.substring.length, match.branches.size)
+            advancePosition(match.substring.length, match.branches.size)
             match
         }
     }
@@ -212,8 +249,11 @@ public class Junction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal construc
     }
 
     override fun match(stream: SymbolStream): Node<*>? {
+        if (this in stream.failCache) {
+            return null
+        }
         return components.asSequence()
-            .filter { it !in stream.recursions }
+            .filter { it !in stream.recursions && it !in stream.failCache }
             .map { it.match(stream) }
             .withIndex()
             .find { it.value != null }
@@ -236,41 +276,41 @@ public class Sequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal construc
         components += query2
     }
 
-    override fun match(stream: SymbolStream) = pivot (stream) {
+    override fun match(stream: SymbolStream) = pivot(stream) {
         val components = components.iterator()
         val first = components.next().resolve()
-        if (first !is Junction<*> && first in stream.recursions) {
-            stream.removeSavedPosition()
+        if (first !is Junction<*> && first in recursions) { // Infinite recursion check
+            removeSavedPosition()
             return@pivot null
         }
 
         // First iteration
-        stream.savePosition()
+        savePosition()
         var subMatch = first.match(stream)
         if (subMatch == null) {
-            stream.revertPosition()
+            revertPosition()
             return@pivot null
         }
         val branches = mutableListOf<Node<*>>()
         branches += subMatch
-        if (stream.input is CharStream && subMatch.substring.isNotEmpty()) {
-            stream.skip!!.match(stream)
+        if (input is CharStream && subMatch.substring.isNotEmpty()) {
+            skip!!.match(stream)
         }
 
-        stream.failCache.clear()
+        failCache.clear()
         while (components.hasNext()) {
             val component = components.next()
             subMatch = component.match(stream)
             if (subMatch == null) {
-                stream.revertPosition()
+                revertPosition()
                 return@pivot null
             }
             branches += subMatch
-            if (stream.input is CharStream && subMatch.substring.isNotEmpty()) {
-                stream.skip!!.match(stream)
+            if (input is CharStream && subMatch.substring.isNotEmpty()) {
+                skip!!.match(stream)
             }
         }
-        stream.removeSavedPosition()
+        removeSavedPosition()
         SequenceNode(typed, branches.concatenate(), branches)
     }
 
