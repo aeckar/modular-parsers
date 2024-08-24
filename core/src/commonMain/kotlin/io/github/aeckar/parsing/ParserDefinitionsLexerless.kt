@@ -29,11 +29,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
         return NamedSymbol(symbol.name, Text(this))
     }
 
-    /**
-     * Returns a [Text] symbol.
-     */
     public final override fun text(query: String): Text = super.text(query).unsafeCast()
-
     public final override fun of(switch: String): Switch = super.of(switch).unsafeCast()
 
     // ------------------------------ options ------------------------------

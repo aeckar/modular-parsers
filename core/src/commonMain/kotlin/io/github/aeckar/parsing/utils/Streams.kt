@@ -1,8 +1,6 @@
 package io.github.aeckar.parsing.utils
 
-import io.github.aeckar.parsing.Node
-import io.github.aeckar.parsing.Symbol
-import io.github.aeckar.parsing.Token
+import io.github.aeckar.parsing.*
 import kotlinx.io.Buffer
 import kotlinx.io.RawSource
 import kotlinx.io.readString
@@ -11,30 +9,39 @@ import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
 
 /**
- * Returns null if any stream used within [block] is exhausted, and saves the position of the stream beforehand.
+ * Returns null if any stream used within [block] is exhausted,
+ * saves the position of the stream beforehand,
+ * and logs the match attempt.
  *
  * If null is returned by [block] or the stream is exhausted,
  * the match to the receiver has failed and the failure is cached.
  */
 @OptIn(ExperimentalContracts::class)
-internal inline fun <ReturnT> Symbol.pivot(
+internal inline fun <MatchT : Node<*>?> Symbol.pivot(
     stream: SymbolStream,
-    crossinline block: SymbolStream.() -> ReturnT
-): ReturnT? {
+    crossinline block: SymbolStream.() -> MatchT
+): MatchT? {
     contract {
         callsInPlace(block, InvocationKind.EXACTLY_ONCE)
     }
     if (this in stream.failCache) {
+        debugFail { "Previous attempt failed" }
         return null
     }
     stream.savePosition()
-    return try {
+    val result = try {
         block(stream)
     } catch (_: StreamExhaustedSignal) {
+        debugFail { "Stream exhausted" }
         null
-    } ?: null.also {
+    }
+    if (result != null) {
+        debugSuccess(result)
+    } else {
+        debugFail()
         stream.failCache += this
     }
+    return result
 }
 
 /**
@@ -111,22 +118,21 @@ internal abstract class UnbufferedStream : Stream {
  * Represents a stream of symbols within another [Stream].
  * @param input a character or token stream that instances of this class delegate to
  * @param skip the skip symbol of the parser
- * @param recursions TODO
- * @param failCache TODO
+ * @param failCache symbols that have previously been failed to match (cleared by [ImplicitSequence])
  */
 internal class SymbolStream private constructor(
     val input: Stream,
     val skip: Symbol?,
-    val recursions: MutableList<Symbol> = mutableListOf(),
+    val symbolCallStack: MutableList<Symbol> = mutableListOf(),
     val failCache: MutableSet<Symbol> = mutableSetOf()
 ) : Stream by input {
     constructor(input: String, skip: Symbol?) : this(StringCharStream(input), skip)
     constructor(input: RawSource, skip: Symbol?) : this(SourceCharStream(input), skip)
     constructor(input: Stream) : this(input, null)
 
-    fun Symbol.match(): Node<*>? = match(this@SymbolStream)
+    fun Symbol.matchOnce(): Node<*>? = match(this@SymbolStream)
 
-    override fun toString() = "{ input = $input, skip = $skip, recursions = $recursions, failCache = $failCache }"
+    override fun toString() = "{ input = $input, skip = $skip, recursions = $symbolCallStack, failCache = $failCache }"
 }
 
 internal class TokenStream(private val tokens: List<Token>) : UnbufferedStream() {

@@ -52,6 +52,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlinx.io)
                 implementation(libs.kotlinx.collections.immutable)
+                implementation(libs.kotlin.logging)
             }
         }
         commonTest {

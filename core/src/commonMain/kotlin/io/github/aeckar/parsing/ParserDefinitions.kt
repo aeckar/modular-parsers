@@ -37,6 +37,7 @@ public sealed class ParserDefinition {
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
     internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
+    internal val inversionSymbols = mutableSetOf<Inversion>()
 
     /**
      * @throws MalformedParserException the assertion fails
@@ -47,49 +48,7 @@ public sealed class ParserDefinition {
         }
     }
 
-    /**
-     * A view of a single character or switch escape in [string].
-     *
-     * Enables idiomatic parsing of strings containing values.
-     * Can be modified so that this view refers to a different character, or none at all.
-     */
-    private class SwitchStringView(val string: String) {
-        private var index = 0
-
-        fun isWithinBounds() = index < string.length
-        fun isNotWithinBounds() = index >= string.length
-
-        inline infix fun satisfies(predicate: (Char) -> Boolean) = isWithinBounds() && predicate(string[index])
-
-        fun char(): Char {
-            fun raiseMalformedEscape(): Nothing {
-                throw IllegalArgumentException("Malformed switch escape in \"$string\" (index = $index)")
-            }
-
-            if (string[index] != '/') {
-                return string[index]
-            }
-            move(1)
-            if (isNotWithinBounds()) {
-                raiseMalformedEscape()
-            }
-            return when (char()) {
-                '/', '-' -> char()
-                else -> raiseMalformedEscape()
-            }
-        }
-
-        fun move(indexAugment: Int) {
-            if (satisfies { it == '/' }) {
-                ++index
-            }
-            index += indexAugment
-        }
-
-        override fun toString() = "\"$string\" (index = $index)"
-    }
-
-    // ------------------------------ symbol definition and import ------------------------------
+    // ------------------------------ symbol definition & import ------------------------------
 
     /**
      * Assigns a name to this symbol.
@@ -104,6 +63,9 @@ public sealed class ParserDefinition {
         if (this is TypeUnsafeSymbol<*, *>) {  // Ensure implicit symbol itself is not used for parsing
             implicitSymbols[name] = null
         } else {
+            if (this is Inversion) {    // Each requires definition of origin parser
+                inversionSymbols += this
+            }
             parserSymbols[name] = this
         }
         return NamedSymbol(name, this)
@@ -196,7 +158,12 @@ public sealed class ParserDefinition {
         }
     }
 
-    // ------------------------------ implicit symbols ------------------------------
+    // ------------------------------ symbol inversions & implicit symbols ------------------------------
+
+    /**
+     * Returns an [Inversion] of this symbol.
+     */
+    public operator fun NamedSymbol<*>.not(): Inversion = Inversion(this)
 
     /**
      * The definition of this implicit symbol.
@@ -237,14 +204,13 @@ public sealed class ParserDefinition {
     /**
      * Returns the switch literal inverse to this string.
      */
-    public operator fun String.not(): String {
-        TODO("BUUIHILOHIOHHHLUH")
-    }
+    public operator fun String.not(): String = this.toRanges().invertRanges().rangesToString()
 
     /**
      * Returns a [Text] symbol.
      */
     protected open fun text(query: String): ParserComponent = Text(query)
+
 
     /**
      * Returns a [character switch][Switch] symbol.
@@ -256,34 +222,7 @@ public sealed class ParserDefinition {
      *
      * Should be preferred over a junction of [text symbols][text] each with a single character.
      */
-    protected open fun of(switch: String): ParserComponent = with(SwitchStringView(switch)) {
-        require(isWithinBounds()) { "Switch definition must not be empty" }
-        val ranges = mutableListOf<CharRange>()
-        if (char() == '-') {    // Parse "at-most" range
-            move(1)
-            if (isNotWithinBounds()) {
-                return Switch.ANY_CHAR
-            }
-            ranges += Char.MIN_VALUE..char()
-            move(1)
-        }
-        while (isWithinBounds()) {  // Parse middle ranges and exact characters
-            val lowerBound = char()
-            move(1)
-            if (!satisfies { it == '-' }) {
-                ranges += lowerBound..lowerBound
-                continue
-            }
-            move(1)
-            if (isNotWithinBounds()) {  // Parse "at-least" range
-                ranges += lowerBound..Char.MAX_VALUE
-                break
-            }
-            ranges += lowerBound..char()
-            move(1)
-        }
-        Switch(switch, ranges)
-    }
+    protected open fun of(switch: String): ParserComponent = Switch(switch, switch.toRanges().optimizeRanges())
 
     // ------------------------------ options ------------------------------
 

@@ -7,6 +7,88 @@ import io.github.aeckar.parsing.utils.*
 
 private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)" else toString()
 
+// ------------------------------ switch utilities ------------------------------
+
+internal fun String.toRanges(): MutableList<CharRange> {
+    fun CharIterator.nextCharOrEscape(): Char {
+        try {
+            val char = nextChar()
+            return if (char != '/') {
+                char
+            } else when (val escape = nextChar()) {
+                '-', '/' -> escape
+                else -> throw MalformedParserException("Invalid switch literal escape character '$escape'")
+            }
+        } catch (_: NoSuchElementException) {
+            throw MalformedParserException("Malformed switch literal '$this@toRanges'")
+        }
+    }
+
+    fun CharIterator.nextRange(): List<CharRange> {
+        val start = nextCharOrEscape()
+        if (start == '-') {
+            return listOf(Char.MIN_VALUE..nextCharOrEscape())
+        }
+        val next = nextCharOrEscape()
+        return if (next != '-') {
+            listOf(start..start, next..next)
+        } else {
+            val endInclusive = if (!hasNext()) Char.MAX_VALUE else nextCharOrEscape()
+            listOf(start..endInclusive)
+        }
+    }
+
+    val ranges = mutableListOf<CharRange>()
+    val chars = iterator()
+    while (chars.hasNext()) {
+        ranges += chars.nextRange()
+    }
+    return ranges
+}
+
+internal fun List<CharRange>.invertRanges(): List<CharRange> {
+    val inverted = ArrayList<CharRange>(size)
+    for (range in this) {
+        if (range.first == Char.MIN_VALUE) {
+            if (range.last == Char.MAX_VALUE) {
+                throw MalformedParserException("Cannot invert all-inclusive switch range '\\u0000-\\uFFFF'")
+            }
+        } else {
+            inverted += Char.MIN_VALUE..<range.first
+            if (range.last != Char.MAX_VALUE) {
+                continue
+            }
+        }
+        inverted += (range.last + 1)..Char.MAX_VALUE
+    }
+    return inverted
+}
+
+internal fun List<CharRange>.rangesToString() = joinToString("") {
+    if (it.first == it.last) it.first.toString() else "${it.first}-${it.last}"
+}
+
+/**
+ * Merges intersecting ranges in the list, in place.
+ * @return a view of a portion of this list
+ */
+internal fun MutableList<CharRange>.optimizeRanges(): List<CharRange> {
+    if (size == 1) {
+        return this
+    }
+    var lastMerged = 0
+    sortBy { it.first }
+    for (i in 1..lastIndex) {
+        if (this[i].first <= this[lastMerged].last) {
+            this[lastMerged] = this[lastMerged].first..this[i].last
+        } else {
+            ++lastMerged
+            this[lastMerged] = this[i]
+        }
+    }
+    return subList(0, lastMerged + 1)
+}
+
 /**
  * Returns a string equal to this one with invisible characters expressed as their Kotlin escape character.
  */
@@ -41,7 +123,6 @@ public abstract class Symbol internal constructor() : ParserComponent {
     internal open fun resolve() = this
 
     internal abstract fun match(stream: SymbolStream): Node<*>?
-
 }
 
 /**
@@ -55,6 +136,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
  */
 public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> internal constructor() : Symbol() {
     final override val rawName: String by lazy { resolveRawName() }
+
     /**
      * The returned name is not enclosed in parentheses.
      */
@@ -144,30 +226,30 @@ public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<Lex
 /**
  * A symbol matching a string of characters.
  */
-public class Text internal constructor(private val query: String) : BasicSymbol<Text>() {
+public class Text internal constructor(private val literal: String) : BasicSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
     override fun match(stream: SymbolStream) = pivot(stream) {
         val matchExists = if (input is CharStream) {
-            query.all { it == input.next() }
+            literal.all { it == input.next() }
         } else {
             this@Text.rawName == (input as TokenStream).next().name
         }
         revertPosition()
         takeIf { matchExists }?.let {
-            advancePosition(query.length, 1)
-            Node(this@Text, query)
+            advancePosition(literal.length, 1)
+            Node(this@Text, literal)
         }
     }
 
-    override fun resolveRawName() = "\"${query.withEscapes()}\""
+    override fun resolveRawName() = "\"${literal.withEscapes()}\""
 }
 
 /**
  * A symbol matching a single character agreeing with a set of ranges and exact characters.
  */
 public class Switch internal constructor(
-    private val switch: String,
+    private val literal: String,    // Before optimization
     private val ranges: List<CharRange>
 ) : BasicSymbol<Switch>() {
     override fun match(stream: SymbolStream) = pivot(stream) {
@@ -188,7 +270,7 @@ public class Switch internal constructor(
         }
     }
 
-    override fun resolveRawName() = "[${switch.withEscapes()}]"
+    override fun resolveRawName() = "[${literal.withEscapes()}]"
 
     public companion object {
         /**
@@ -204,19 +286,24 @@ public class Switch internal constructor(
 public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSymbol<Repetition<SubMatchT>>() {
     override fun match(stream: SymbolStream) = pivot(stream) {
         val children = mutableListOf<Node<SubMatchT>>()
-        var subMatch: Node<SubMatchT>? = query.match().unsafeCast()
+        var subMatch: Node<SubMatchT>? = query.matchOnce().unsafeCast()
+        debug { "Attempting matches to query ${query.rawName}" }
         while (subMatch != null) {
             children += subMatch
             if (subMatch.substring.isEmpty()) {
+                debug { "End matches to query (matched substring is empty)" }
                 break
             }
-            subMatch = query.match().unsafeCast()
+            debug { "Attempting match to skip $skip" }
+            skip!!.matchOnce()
+            subMatch = query.matchOnce().unsafeCast()
         }
+        debug { "Query matched ${children.size} times" }
         revertPosition()
         takeIf { children.isNotEmpty() }?.let {
-            val match = RepetitionNode(this@Repetition, children.concatenate(), children)
-            advancePosition(match.substring.length, match.branches.size)
-            match
+            val result = RepetitionNode(this@Repetition, children.concatenate(), children)
+            advancePosition(result.substring.length, result.branches.size)
+            result
         }
     }
 
@@ -230,10 +317,35 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : BasicSym
     private val emptyMatch = OptionNode(this, "", null)
 
     override fun match(stream: SymbolStream): Node<*> {
-        return query.match(stream)?.let { OptionNode(this@Option, it.substring, it.unsafeCast()) } ?: emptyMatch
+        debug { "Attempting match to query ${query.rawName}" }
+        val result = query.match(stream)?.let { OptionNode(this@Option, it.substring, it.unsafeCast()) } ?: emptyMatch
+        debugSuccess(result)
+        return result
     }
 
     override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
+}
+
+/**
+ * A symbol matching the first of any but one named symbol in the affiliated parser.
+ *
+ * If the affiliated parser is a [LexerParser], match attempts are only made to lexer symbols.
+ */
+public class Inversion(
+    private val exclusion: NamedSymbol<*>
+) : BasicSymbol<Inversion>() {
+    internal var origin: Parser by OnceAssignable(throws = ::IllegalStateException)
+
+    override fun match(stream: SymbolStream) = pivot(stream) {
+        origin.parserSymbols.values.asSequence()
+            .mapNotNull {
+                debug { "Attempting match to query ${it.rawName}" }
+                it.matchOnce()
+            }
+            .firstOrNull()
+    }
+
+    override fun resolveRawName() = "!$exclusion"
 }
 
 /**
@@ -249,12 +361,17 @@ public class ImplicitJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal 
     }
 
     override fun match(stream: SymbolStream): Node<*>? {
+        debug { "Attempting match" }
         if (this in stream.failCache) {
+            debugFail { "Previous attempt failed" }
             return null
         }
         return components.asSequence()
-            .filter { it !in stream.recursions && it !in stream.failCache }
-            .map { it.match(stream) }
+            .filter { it !in stream.symbolCallStack && it !in stream.failCache }
+            .map {
+                debug { "Attempting match to query ${it.rawName}" }
+                it.match(stream)
+            }
             .withIndex()
             .find { it.value != null }
             ?.unsafeCast<IndexedValue<Node<*>>>()
@@ -277,38 +394,44 @@ public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal 
     }
 
     override fun match(stream: SymbolStream) = pivot(stream) {
+        fun Node<*>.skipIgnored() {
+            if (input is CharStream) {
+                if (this.substring.isNotEmpty()) {
+                    debug { "Attempting match to skip $skip" }
+                    skip!!.matchOnce()
+                } else {
+                    debug { "Match to skip ignored (matched substring is empty)" }
+                }
+            }
+        }
+
         val components = components.iterator()
         val first = components.next().resolve()
-        if (first !is ImplicitJunction<*> && first in recursions) { // Infinite recursion check
+        if (first !is ImplicitJunction<*> && first in symbolCallStack) {    // Prevents infinite recursion
+            debug { "Recursion found for non-junction query ${first.rawName}" }
             removeSavedPosition()
             return@pivot null
         }
 
         // First iteration
         savePosition()
-        var subMatch = first.match(stream)
+        var subMatch = first.matchOnce()
         if (subMatch == null) {
             revertPosition()
             return@pivot null
         }
         val branches = mutableListOf<Node<*>>()
-        branches += subMatch
-        if (input is CharStream && subMatch.substring.isNotEmpty()) {
-            skip!!.match(stream)
-        }
+        branches += subMatch.also { it.skipIgnored() }
 
         failCache.clear()
         while (components.hasNext()) {
             val component = components.next()
-            subMatch = component.match(stream)
+            subMatch = component.matchOnce()
             if (subMatch == null) {
                 revertPosition()
                 return@pivot null
             }
-            branches += subMatch
-            if (input is CharStream && subMatch.substring.isNotEmpty()) {
-                skip!!.match(stream)
-            }
+            branches += subMatch.also { it.skipIgnored() }
         }
         removeSavedPosition()
         SequenceNode(typed, branches.concatenate(), branches)

@@ -177,6 +177,10 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
+    init {
+        def.inversionSymbols.forEach { it.origin = this }
+    }
+
     final override fun parse(input: String): Node<*>? {
         return start.match(SymbolStream(input, skip))
     }
@@ -256,6 +260,10 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
     private val lexerSymbols = def.lexerSymbols
     private val start = def.startDelegate.field
     private val recovery = def.recoveryDelegate.field
+
+    init {
+        def.inversionSymbols.forEach { it.origin = this }
+    }
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy {
         HashMap<String, NameableSymbol<*>>(parserSymbols.size + lexerSymbols.size).apply {

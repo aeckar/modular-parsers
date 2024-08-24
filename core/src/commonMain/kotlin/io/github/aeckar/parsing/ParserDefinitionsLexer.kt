@@ -50,11 +50,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
         return NamedSymbol(symbol.name, LexerSymbol(SymbolFragment(Text(this)))).also { lexerSymbols += it }
     }
 
-    /**
-     * Returns a [Text] fragment.
-     */
     public final override fun text(query: String): SymbolFragment = SymbolFragment(Text(query))
-
     public final override fun of(switch: String): SymbolFragment = SymbolFragment(super.of(switch).unsafeCast())
 
     // ------------------------------ options ------------------------------

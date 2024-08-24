@@ -3,8 +3,6 @@ package io.github.aeckar.parsing
 import io.github.aeckar.parsing.typesafe.Sequence2
 import kotlin.test.Test
 
-// TODO after testing, add ! for lexer symbols/fragments
-
 @Suppress("UNUSED_VARIABLE")
 private val textParser by parser {
     val char by junction()
