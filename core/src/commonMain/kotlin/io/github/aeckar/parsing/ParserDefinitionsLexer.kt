@@ -5,7 +5,7 @@ import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
 /**
- * Defines a scope where a [LexerParser] can be defined.
+ * Defines a scope where a [NameableLexerParser] can be defined.
  */
 public sealed class LexerParserDefinition : ParserDefinition() {
     internal val recoveryDelegate = OnceAssignable<Symbol, _>(::MalformedParserException)
@@ -25,7 +25,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     /**
      * The lexer symbols to be ignored during lexical analysis.
      *
-     * Nodes produced by these symbols will not be present in the list returned by [LexerParser.tokenize].
+     * Nodes produced by these symbols will not be present in the list returned by [NameableLexerParser.tokenize].
      * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
@@ -203,14 +203,14 @@ public sealed class LexerParserDefinition : ParserDefinition() {
 }
 
 /**
- * Defines a scope where a [LexerParser] that does not take an argument can be defined.
+ * Defines a scope where a [NameableLexerParser] that does not take an argument can be defined.
  */
 public class NullaryLexerParserDefinition internal constructor(  // Argument never explicitly given
     internal val base: NullaryLexerlessParserDefinition = NullaryLexerlessParserDefinition()
 ) : LexerParserDefinition(), NullaryParserDefinition by base
 
 /**
- * Defines a scope where a [LexerParser] that takes one argument can be defined.
+ * Defines a scope where a [NameableLexerParser] that takes one argument can be defined.
  */
 public class UnaryLexerParserDefinition<ArgumentT> internal constructor( // Argument never explicitly given
     internal val base: UnaryLexerlessParserDefinition<ArgumentT> = UnaryLexerlessParserDefinition()

@@ -86,9 +86,23 @@ public sealed interface Parser {
     public fun parse(input: RawSource): Node<*>?
 }
 
-internal val Parser.parserSymbols: Map<String, NameableSymbol<*>>
-    get() = if (this is LexerlessParser) parserSymbols else (this as LexerParser).parserSymbols
-internal val Parser.listeners get() = if (this is LexerlessParser) listeners else (this as LexerParser).listeners
+internal val Parser.parserSymbols: Map<String, NameableSymbol<*>> get() = when (this) {
+    is NameableLexerlessParser -> parserSymbols
+    is NameableLexerParser -> parserSymbols
+    is NamedNullaryLexerlessParser -> unnamed.parserSymbols
+    is NamedUnaryLexerlessParser<*> -> unnamed.parserSymbols
+    is NamedNullaryLexerParser -> unnamed.parserSymbols
+    is NamedUnaryLexerParser<*> -> unnamed.parserSymbols
+}
+
+internal val Parser.listeners get() = when (this) {
+    is NameableLexerlessParser -> listeners
+    is NameableLexerParser -> listeners
+    is NamedNullaryLexerlessParser -> unnamed.listeners
+    is NamedUnaryLexerlessParser<*> -> unnamed.listeners
+    is NamedNullaryLexerParser -> unnamed.listeners
+    is NamedUnaryLexerParser<*> -> unnamed.listeners
+}
 
 /**
  * A named parser.
@@ -120,7 +134,7 @@ public operator fun NullaryParser.invoke(input: RawSource): Node<*>? = parse(inp
 
 private fun NullaryParser.listenerStrategy(node: Node<*>) {
     listeners[toString()]
-        ?.unsafeCast<NullaryListener<Symbol>>()
+        ?.unsafeCast<NullarySymbolListener<Symbol>>()
         ?.apply { node.unsafeCast<Node<Symbol>>()() }
 }
 
@@ -159,7 +173,7 @@ private val <ArgumentT> UnaryParser<ArgumentT>.initializer get() =
 
 private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: ArgumentT, node: Node<*>) {
     listeners[toString()]
-        ?.unsafeCast<UnaryListener<Symbol, ArgumentT>>()
+        ?.unsafeCast<UnarySymbolListener<Symbol, ArgumentT>>()
         ?.apply { node.unsafeCast<Node<Symbol>>()(argument) }
 }
 
@@ -168,11 +182,11 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: Argume
 /**
  * A parser that creates an abstract syntax tree directly from its input.
  */
-public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
+public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Parser {
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
 
-    private val start = def.startDelegate.field ?: raiseUndefinedStart()
+    private val start = def.startDelegate.field
     private val skip = def.skipDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
@@ -182,11 +196,11 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
     }
 
     final override fun parse(input: String): Node<*>? {
-        return start.match(SymbolStream(input, skip))
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
     }
 
     final override fun parse(input: RawSource): Node<*>? {
-        return start.match(SymbolStream(input, skip))
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
     }
 }
 
@@ -195,19 +209,21 @@ public sealed class LexerlessParser(def: LexerlessParserDefinition) : Parser {
  */
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
-) : LexerlessParser(def), Nameable, NullaryParser {
+) : NameableLexerlessParser(def), Nameable, NullaryParser {
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerlessParser {
         return NamedNullaryLexerlessParser(property.name, this)
     }
 }
 
 /**
- * A named [LexerlessParser] that does not take an argument.
+ * A named [NameableLexerlessParser] that does not take an argument.
  */
 public class NamedNullaryLexerlessParser internal constructor(
     override val name: String,
-    private val unnamed: NullaryLexerlessParser
-) : NamedNullaryParser, NullaryParser by unnamed
+    internal val unnamed: NullaryLexerlessParser
+) : NamedNullaryParser, NullaryParser by unnamed {
+    override fun toString(): String = name
+}
 
 /**
  * A parser that takes an argument,
@@ -215,7 +231,7 @@ public class NamedNullaryLexerlessParser internal constructor(
  */
 public class UnaryLexerlessParser<ArgumentT> internal constructor(
     def: UnaryLexerlessParserDefinition<ArgumentT>
-) : LexerlessParser(def), Nameable, UnaryParser<ArgumentT> {
+) : NameableLexerlessParser(def), Nameable, UnaryParser<ArgumentT> {
     internal val initializer = def.initializer
 
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerlessParser<ArgumentT> {
@@ -224,12 +240,14 @@ public class UnaryLexerlessParser<ArgumentT> internal constructor(
 }
 
 /**
- * A named [LexerlessParser] that takes one argument.
+ * A named [NameableLexerlessParser] that takes one argument.
  */
 public class NamedUnaryLexerlessParser<ArgumentT> internal constructor(
     override val name: String,
-    private val unnamed: UnaryLexerlessParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed
+    internal val unnamed: UnaryLexerlessParser<ArgumentT>
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed {
+    override fun toString(): String = name
+}
 
 // ------------------------------ lexer-parsers ------------------------------
 
@@ -251,7 +269,7 @@ public sealed interface Lexer {
 /**
  * A parser that tokenizes its input before parsing.
  */
-public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
+public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Parser {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
 
     internal val parserSymbols = def.resolveSymbols()
@@ -272,19 +290,19 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = parse(StringCharStream(input))
-    final override fun parse(input: RawSource): Node<*>? = parse(SourceCharStream(input))
+    final override fun parse(input: String): Node<*>? = parse(StringPivotIterator(input))
+    final override fun parse(input: RawSource): Node<*>? = parse(SourcePivotIterator(input))
 
     // Defensive copy
-    final override fun tokenize(input: String): List<Token> = tokenize(StringCharStream(input)).toList()
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourceCharStream(input)).toList()
+    final override fun tokenize(input: String): List<Token> = tokenize(StringPivotIterator(input)).toList()
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourcePivotIterator(input)).toList()
 
-    private fun parse(input: CharStream): Node<*>? {
-        return (start ?: raiseUndefinedStart()).match(SymbolStream(TokenStream(tokenize(input))))
+    private fun parse(input: CharPivotIterator): Node<*>? {
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(TokenPivotIterator(tokenize(input))))
     }
 
-    private fun tokenize(input: CharStream): List<Token> {
-        val metadata = SymbolStream(input)
+    private fun tokenize(input: CharPivotIterator): List<Token> {
+        val metadata = ParserMetadata(input)
         val tokens = mutableListOf<Token>()
         var inRecovery = false
         var recoveryIndex = 0
@@ -314,30 +332,32 @@ public sealed class LexerParser(def: LexerParserDefinition) : Lexer, Parser {
 }
 
 /**
- * A [LexerParser] that does not take an argument.
+ * A [NameableLexerParser] that does not take an argument.
  */
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
-) : LexerParser(def), Nameable, NullaryParser, Lexer {
+) : NameableLexerParser(def), Nameable, NullaryParser, Lexer {
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerParser {
         return NamedNullaryLexerParser(property.name, this)
     }
 }
 
 /**
- * A named [LexerParser] that does not take an argument.
+ * A named [NameableLexerParser] that does not take an argument.
  */
 public class NamedNullaryLexerParser internal constructor(
     override val name: String,
-    private val unnamed: NullaryLexerParser
-) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed
+    internal val unnamed: NullaryLexerParser
+) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed {
+    override fun toString(): String = name
+}
 
 /**
- * A [LexerParser] that takes one argument.
+ * A [NameableLexerParser] that takes one argument.
  */
 public class UnaryLexerParser<ArgumentT> internal constructor(
     def: UnaryLexerParserDefinition<ArgumentT>
-) : LexerParser(def), Nameable, UnaryParser<ArgumentT>, Lexer {
+) : NameableLexerParser(def), Nameable, UnaryParser<ArgumentT>, Lexer {
     internal val initializer = def.base.initializer
 
     override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerParser<ArgumentT> {
@@ -346,9 +366,11 @@ public class UnaryLexerParser<ArgumentT> internal constructor(
 }
 
 /**
- * A named [LexerParser] that takes one argument.
+ * A named [NameableLexerParser] that takes one argument.
  */
 public class NamedUnaryLexerParser<ArgumentT> internal constructor(
     override val name: String,
-    private val unnamed: UnaryLexerParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed
+    internal val unnamed: UnaryLexerParser<ArgumentT>
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed {
+    override fun toString(): String = name
+}

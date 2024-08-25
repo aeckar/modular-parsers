@@ -1,8 +1,8 @@
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.*
-import io.github.aeckar.parsing.utils.Nameable
-import io.github.aeckar.parsing.utils.OnceAssignable
+import io.github.aeckar.parsing.utils.*
+import io.github.aeckar.parsing.utils.toRanges
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
@@ -283,7 +283,7 @@ public sealed interface NullaryParserDefinition {
      *
      * Whenever a match is made to this symbol, the listener is invoked.
      */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: NullaryListener<MatchT>)
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: NullarySymbolListener<MatchT>)
 
     /**
      * Assigns the supplied listener to the symbol.
@@ -292,7 +292,7 @@ public sealed interface NullaryParserDefinition {
      * the listener previously defined for this symbol is invoked before this one is.
      */
     public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: NullaryListener<MatchT>
+        action: NullarySymbolListener<MatchT>
     )
 }
 
@@ -306,7 +306,7 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      * Whenever a match is made to this symbol, the listener is invoked.
      */
     public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     )
 
     /**
@@ -316,14 +316,14 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      * the listener previously defined for this symbol is invoked before this one is.
      */
     public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     )
 
     /**
      * See [extendsListener] for details.
      */
     public infix fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     )
 
     /**

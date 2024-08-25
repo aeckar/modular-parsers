@@ -5,7 +5,7 @@ import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
 
 /**
- * Creates a new [LexerlessParser].
+ * Creates a new [NameableLexerlessParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
@@ -15,7 +15,7 @@ public fun parser(definition: NullaryLexerlessParserDefinition.() -> Unit): Null
 }
 
 /**
- * Creates a new [LexerlessParser] that takes an argument.
+ * Creates a new [NameableLexerlessParser] that takes an argument.
  *
  * Use of supplied arguments is restricted to the
  * [init][UnaryLexerlessParserDefinition.init] block and symbol [listeners][UnaryLexerlessParserDefinition.listener].
@@ -30,7 +30,7 @@ public fun <ArgumentT> parser(
 }
 
 /**
- * Creates a new [LexerParser].
+ * Creates a new [NameableLexerParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
@@ -40,7 +40,7 @@ public fun lexerParser(definition: NullaryLexerParserDefinition.() -> Unit): Nul
 }
 
 /**
- * Creates a new [LexerParser] that takes an argument.
+ * Creates a new [NameableLexerParser] that takes an argument.
  *
  * Use of supplied arguments is restricted to the
  * [init][UnaryLexerParserDefinition.init] block and symbol [listeners][UnaryLexerParserDefinition.listener].

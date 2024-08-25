@@ -2,7 +2,7 @@
 package io.github.aeckar.parsing.typesafe
 
 import io.github.aeckar.parsing.*
-import io.github.aeckar.parsing.utils.SymbolStream
+import io.github.aeckar.parsing.utils.ParserMetadata
 import io.github.aeckar.parsing.utils.unsafeCast
 
 /**
@@ -16,7 +16,7 @@ public abstract class TypeSafeSymbol<
 > internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
     final override fun resolve() = untyped
 
-    final override fun match(stream: SymbolStream): Node<*>? {
+    final override fun match(stream: ParserMetadata): Node<*>? {
         return untyped.match(stream)?.also { it.unsafeCast<Node<Symbol>>().source = this }
     }
 

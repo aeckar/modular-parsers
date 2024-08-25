@@ -113,24 +113,24 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
  */
 public class NullaryLexerlessParserDefinition internal constructor(
 ) : LexerlessParserDefinition(), NullaryParserDefinition {
-    internal val listeners = mutableMapOf<String, NullaryListener<*>>()
+    internal val listeners = mutableMapOf<String, NullarySymbolListener<*>>()
 
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
     override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: NullaryListener<MatchT>
+        action: NullarySymbolListener<MatchT>
     ) {
         ensureUndefinedListener(name)
         listeners[name] = action
     }
 
     override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: NullaryListener<MatchT>
+        action: NullarySymbolListener<MatchT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = NullaryListener {
-            with(origin.listeners.getValue(name).unsafeCast<NullaryListener<MatchT>>()) {
+        listeners[name] = NullarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
                 this@NullaryListener()
             }
             with(action) { this@NullaryListener() }
@@ -143,7 +143,7 @@ public class NullaryLexerlessParserDefinition internal constructor(
  */
 public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
 ) : LexerlessParserDefinition(), UnaryParserDefinition<ArgumentT> {
-    internal val listeners = mutableMapOf<String, UnaryListener<*, ArgumentT>>()
+    internal val listeners = mutableMapOf<String, UnarySymbolListener<*, ArgumentT>>()
 
     internal var initializer: ((ArgumentT) -> Unit)? = null
 
@@ -151,18 +151,18 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
      * Assigns an action to be performed whenever a successful match is made using this symbol.
      */
     override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         ensureUndefinedListener(name)
         listeners[name] = action
     }
 
     override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = UnaryListener {
-            with(origin.listeners.getValue(name).unsafeCast<NullaryListener<MatchT>>()) {
+        listeners[name] = UnarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
                 this@UnaryListener()
             }
             with(action) { this@UnaryListener(it) }
@@ -170,11 +170,11 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
     }
 
     override fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
-        action: UnaryListener<MatchT, ArgumentT>
+        action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = UnaryListener {
-            with(origin.listeners.getValue(name).unsafeCast<UnaryListener<MatchT, in ArgumentT>>()) {
+        listeners[name] = UnarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<UnarySymbolListener<MatchT, in ArgumentT>>()) {
                 this@UnaryListener(it)
             }
             with(action) { this@UnaryListener(it) }
