@@ -6,17 +6,7 @@ import io.github.aeckar.parsing.utils.toRanges
 import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.reflect.KProperty
 
-/*
-    Junctions and sequences between two characters are not implemented because
-    users can simply use a character switch instead.
- */
-
-internal val ParserDefinition.listeners get() = when (this) {
-    is NullaryLexerlessParserDefinition -> listeners
-    is UnaryLexerlessParserDefinition<*> -> listeners
-    is NullaryLexerParserDefinition -> base.listeners
-    is UnaryLexerParserDefinition<*> -> base.listeners
-}
+// ------------------------------------ abstract parser definitions ------------------------------------
 
 /**
  * Defines a scope where [Parser] rules and listeners can be defined.
@@ -37,6 +27,7 @@ public sealed class ParserDefinition {
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
     internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
+    internal val exportedSymbols = mutableMapOf<String, NamedSymbol<*>>()
     internal val inversionSymbols = mutableSetOf<Inversion>()
 
     /**
@@ -48,14 +39,22 @@ public sealed class ParserDefinition {
         }
     }
 
-    // ------------------------------ symbol definition & import ------------------------------
+    // ------------------------------ symbol definition & import/export ------------------------------
+
+    /**
+     * Enables the [import] of this symbol from other parsers.
+     */
+    public fun export(symbol: NamedSymbol<*>) {
+        exportedSymbols[symbol.name] = symbol
+    }
+
 
     /**
      * Assigns a name to this symbol.
      *
      * Doing this for multiple named symbols is legal.
      */
-    public operator fun <S : NameableSymbol<S>> NameableSymbol<S>.getValue(
+    public operator fun <S : NameableSymbol<out S>> NameableSymbol<out S>.getValue(
         thisRef: Any?,
         property: KProperty<*>
     ): NamedSymbol<S> {
@@ -110,18 +109,12 @@ public sealed class ParserDefinition {
 
         protected fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                origin.parserSymbols.getValue(name)
+                origin.exportedSymbols.getValue(name)
             } catch (e: NoSuchElementException) {
                 throw MalformedParserException("Symbol '$name' is not defined in parser '$origin'", e)
             }
-            parserSymbols[name] = symbol
-            return try {
-                NamedSymbol(name, symbol)
-            } catch (e: ClassCastException) {
-                throw MalformedParserException(
-                    "Symbol '$name' of type ${symbol::class.simpleName} cannot be " +
-                    "cast to type specified by import statement", e)
-            }
+            parserSymbols[name] = symbol.unnamed
+            return symbol
         }
     }
 
@@ -143,7 +136,7 @@ public sealed class ParserDefinition {
         override val origin: NullaryParser
     ) : SymbolImport<NullaryForeignSymbol<UnnamedT>>() {
         override fun getValue(thisRef: Any?, property: KProperty<*>): NullaryForeignSymbol<UnnamedT> {
-            return NullaryForeignSymbol(resolveSymbol(property.name).unsafeCast(), origin)
+            return NullaryForeignSymbol(resolveSymbol(property.name).fragileUnsafeCast(), origin)
         }
     }
 
@@ -154,7 +147,7 @@ public sealed class ParserDefinition {
         override val origin: UnaryParser<ArgumentT>
     ) : SymbolImport<UnaryForeignSymbol<UnnamedT, ArgumentT>>() {
         override fun getValue(thisRef: Any?, property: KProperty<*>): UnaryForeignSymbol<UnnamedT, ArgumentT> {
-            return UnaryForeignSymbol(resolveSymbol(property.name).unsafeCast(), origin)
+            return UnaryForeignSymbol(resolveSymbol(property.name).fragileUnsafeCast(), origin)
         }
     }
 
@@ -274,6 +267,18 @@ public sealed class ParserDefinition {
     }
 }
 
+/*
+    Junctions and sequences between two characters are not implemented because
+    users can simply use a character switch instead.
+ */
+
+internal val ParserDefinition.listeners get() = when (this) {
+    is NullaryLexerlessParserDefinition -> listeners
+    is UnaryLexerlessParserDefinition<*> -> listeners
+    is NullaryLexerParserDefinition -> base.listeners
+    is UnaryLexerParserDefinition<*> -> base.listeners
+}
+
 /**
  * A [definition][ParserDefinition] of a parser without an argument.
  */
@@ -331,3 +336,403 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      */
     public fun init(initializer: (ArgumentT) -> Unit)
 }
+
+// ------------------------------------ lexerless parser definitions ------------------------------------
+
+/**
+ * Defines a scope where a [Parser] without a lexer can be defined.
+ */
+public sealed class LexerlessParserDefinition : ParserDefinition() {
+    internal val skipDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
+
+    /**
+     * The symbol whose matches are discarded during parsing.
+     *
+     * Whenever a successful match is made, whatever is then matched to this symbol is ignored.
+     * @throws MalformedParserException this property is assigned a value more than once
+     */
+    public var skip: Symbol by skipDelegate
+
+    // ------------------------------ text & switches ------------------------------
+
+    /**
+     * Assigns a [Text] symbol of the single character to the property being delegated to.
+     */
+    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<Text> {
+        return NamedSymbol(symbol.name, Text(this))
+    }
+
+    public final override fun text(query: String): Text = super.text(query).unsafeCast()
+    public final override fun of(switch: String): Switch = super.of(switch).unsafeCast()
+
+    // ------------------------------ options ------------------------------
+
+    /**
+     * Returns a text [Option].
+     */
+    public fun maybe(query: String): Option<Text> = Option(Text(query))
+
+    /**
+     * Returns a text [Option].
+     */
+    public fun maybe(query: Char): Option<Text> = Option(Text(query))
+
+    /**
+     * Returns a switch [Option].
+     */
+    public fun maybeOf(switch: String): Option<Switch> = maybe(of(switch))
+
+    // ------------------------------ repetitions ------------------------------
+
+    /**
+     * Returns a text [Repetition].
+     */
+    public fun multiple(query: String): Repetition<Text> = Repetition(Text(query))
+
+    /**
+     * Returns a text [Repetition].
+     */
+    public fun multiple(query: Char): Option<Text> = Option(Text(query))
+
+    /**
+     * Returns a switch [Repetition].
+     */
+    public fun multipleOf(switch: String): Repetition<Switch> = multiple(of(switch))
+
+    // ------------------------------ optional repetitions ------------------------------
+
+    /**
+     * Returns an optional repetition of the text.
+     */
+    public fun any(query: String): Option<Repetition<Text>> = maybe(multiple(Text(query)))
+
+    /**
+     * Returns an optional repetition of the text.
+     */
+    public fun any(query: Char): Option<Repetition<Text>> = maybe(multiple(Text(query)))
+
+    /**
+     * Returns an optional repetition of the character switch.
+     */
+    public fun anyOf(switch: String): Option<Repetition<Switch>> = any(of(switch))
+
+    // ------------------------------ junctions ------------------------------
+
+    /**
+     * Returns a junction of this text and the given symbol.
+     */
+    public infix fun <S2 : Symbol> Char.or(option2: S2): Junction2<Text, S2> = toJunction(Text(this), option2)
+
+    /**
+     * Returns a junction of this symbol and the given text.
+     */
+    public infix fun <S1 : Symbol> S1.or(option2: Char): Junction2<S1, Text> = toJunction(this, Text(option2))
+
+    // ------------------------------ sequences ------------------------------
+
+    /**
+     * Returns a sequence containing this text and the given symbol.
+     */
+    public operator fun <S2 : Symbol> Char.plus(query2: S2): Sequence2<Text, S2> = toSequence(Text(this), query2)
+
+    /**
+     * Returns a sequence containing this symbol and the given text.
+     */
+    public operator fun <S1 : Symbol> S1.plus(query2: Char): Sequence2<S1, Text> = toSequence(this, Text(query2))
+}
+
+/**
+ * Defines a scope where a [Parser] without a lexer that does not take an argument can be defined.
+ */
+public class NullaryLexerlessParserDefinition internal constructor(
+) : LexerlessParserDefinition(), NullaryParserDefinition {
+    internal val listeners = mutableMapOf<String, NullarySymbolListener<*>>()
+
+    /**
+     * Assigns an action to be performed whenever a successful match is made using this symbol.
+     */
+    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: NullarySymbolListener<MatchT>
+    ) {
+        ensureUndefinedListener(name)
+        listeners[name] = action
+    }
+
+    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
+        action: NullarySymbolListener<MatchT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = NullarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
+                this@NullarySymbolListener()
+            }
+            with(action) { this@NullarySymbolListener() }
+        }
+    }
+}
+
+/**
+ * Defines a scope where a [Parser] without a lexer that takes one argument can be defined.
+ */
+public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
+) : LexerlessParserDefinition(), UnaryParserDefinition<ArgumentT> {
+    internal val listeners = mutableMapOf<String, UnarySymbolListener<*, ArgumentT>>()
+
+    internal var initializer: ((ArgumentT) -> Unit)? = null
+
+    /**
+     * Assigns an action to be performed whenever a successful match is made using this symbol.
+     */
+    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: UnarySymbolListener<MatchT, ArgumentT>
+    ) {
+        ensureUndefinedListener(name)
+        listeners[name] = action
+    }
+
+    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
+        action: UnarySymbolListener<MatchT, ArgumentT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = UnarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
+                this@UnarySymbolListener()
+            }
+            with(action) { this@UnarySymbolListener(it) }
+        }
+    }
+
+    override fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
+        action: UnarySymbolListener<MatchT, ArgumentT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = UnarySymbolListener {
+            with(origin.listeners.getValue(name).unsafeCast<UnarySymbolListener<MatchT, in ArgumentT>>()) {
+                this@UnarySymbolListener(it)
+            }
+            with(action) { this@UnarySymbolListener(it) }
+        }
+    }
+
+    /**
+     * Describes the initialization logic of arguments supplied to this parser.
+     */
+    override fun init(initializer: (ArgumentT) -> Unit) {
+        this.initializer?.let { throw MalformedParserException("Initializer defined more than once") }
+        this.initializer = initializer
+    }
+}
+
+// ------------------------------------ lexer-parser definitions ------------------------------------
+
+/**
+ * Defines a scope where a [NameableLexerParser] can be defined.
+ */
+public sealed class LexerParserDefinition : ParserDefinition() {
+    internal val recoveryDelegate = OnceAssignable<Symbol, _>(::MalformedParserException)
+
+    /**
+     * During [tokenization][Lexer.tokenize], if a sequence of characters cannot be matched to a named [LexerSymbol],
+     * any adjacent substrings matching this symbol that do not match a named lexer symbol
+     * are combined into a single unnamed token.
+     *
+     * If left unspecified and a match cannot be made to a named lexer symbol, an [IllegalTokenException] is thrown.
+     * This exception is also thrown if a match to this symbol produces a token of an empty substring
+     * (e.g., if this is an [Option]).
+     * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
+     */
+    public val recovery: Symbol by recoveryDelegate
+
+    /**
+     * The lexer symbols to be ignored during lexical analysis.
+     *
+     * Nodes produced by these symbols will not be present in the list returned by [NameableLexerParser.tokenize].
+     * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
+     */
+    public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
+
+    internal val lexerSymbols = mutableListOf<NamedSymbol<LexerSymbol>>()
+
+    // ------------------------------ symbol definition ------------------------------
+
+    /**
+     * Assigns a [LexerSymbol] matching this fragment to the property being delegated to.
+     */
+    public operator fun SymbolFragment.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
+        return NamedSymbol(symbol.name, LexerSymbol(this))
+    }
+
+    // ------------------------------ text & switches ------------------------------
+
+    /**
+     * Assigns a [LexerSymbol] matching this character to the property being delegated to.
+     */
+    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
+        return NamedSymbol(symbol.name, LexerSymbol(SymbolFragment(Text(this)))).also { lexerSymbols += it }
+    }
+
+    public final override fun text(query: String): SymbolFragment = SymbolFragment(Text(query))
+    public final override fun of(switch: String): SymbolFragment = SymbolFragment(super.of(switch).unsafeCast())
+
+    // ------------------------------ options ------------------------------
+
+    /**
+     * Return an [Option] of the given fragment.
+     */
+    public fun maybe(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(query.root))
+
+    /**
+     * Returns a text [Option].
+     */
+    public fun maybe(query: String): SymbolFragment = SymbolFragment(Option(Text(query)))
+
+    /**
+     * Returns a text [Option].
+     */
+    public fun maybe(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
+
+    /**
+     * Returns a switch [Option].
+     */
+    public fun maybeOf(switch: String): SymbolFragment = SymbolFragment(maybe(super.of(switch) as Switch))
+
+    // ------------------------------ repetitions ------------------------------
+
+    /**
+     * Returns a [Repetition] of the given fragment.
+     */
+    public fun multiple(query: SymbolFragment): SymbolFragment = SymbolFragment(multiple(query.root))
+
+    /**
+     * Returns a text [Repetition].
+     */
+    public fun multiple(query: String): SymbolFragment = SymbolFragment(Repetition(Text(query)))
+
+    /**
+     * Returns a text [Repetition].
+     */
+    public fun multiple(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
+
+    /**
+     * Returns a switch [Repetition].
+     */
+    public fun multipleOf(switch: String): SymbolFragment = SymbolFragment(multiple(super.of(switch) as Switch))
+
+    // ------------------------------ optional repetitions ------------------------------
+
+    /**
+     * Returns an optional repetition of the given fragment.
+     */
+    public fun any(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(multiple(query.root)))
+
+    /**
+     * Returns an optional repetition of the text.
+     */
+    public fun any(query: String): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
+
+    /**
+     * Returns an optional repetition of the text.
+     */
+    public fun any(query: Char): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
+
+    /**
+     * Returns an optional repetition of the switch.
+     */
+    public fun anyOf(switch: String): SymbolFragment = SymbolFragment(any(super.of(switch) as Switch))
+
+    // ------------------------------ junctions ------------------------------
+
+    /**
+     * Returns a junction of the two fragments.
+     */
+    public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
+        val other = option2.root
+        if (root is ImplicitJunction<*>) {
+            root.components += other
+            return this
+        }
+        if (other is ImplicitJunction<*>) {
+            other.components += root
+            return option2
+        }
+        return SymbolFragment(ImplicitJunction(root, other))
+    }
+
+    /**
+     * Returns a junction of this text and the given fragment.
+     */
+    public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
+        val other = option2.root
+        if (other is ImplicitJunction<*>) {
+            other.components += Text(this)
+            return option2
+        }
+        return SymbolFragment(ImplicitJunction(Text(this), other))
+    }
+
+    /**
+     * Returns a junction of this fragment and the given text.
+     */
+    public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
+        if (root is ImplicitJunction<*>) {
+            root.components += Text(option2)
+            return this
+        }
+        return SymbolFragment(ImplicitJunction(Text(option2), root))
+    }
+
+    // ------------------------------ sequences ------------------------------
+
+    /**
+     * Returns a sequence containing the two fragments
+     */
+    public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
+        val other = query2.root
+        if (root is ImplicitSequence<*>) {
+            root.components += other
+            return this
+        }
+        if (other is ImplicitSequence<*>) {
+            other.components += root
+            return query2
+        }
+        return SymbolFragment(ImplicitSequence(root, other))
+    }
+
+    /**
+     * Returns a sequence containing this text and the given fragment.
+     */
+    public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
+        val other = query2.root
+        if (other is ImplicitSequence<*>) {
+            other.components += Text(this)
+            return query2
+        }
+        return SymbolFragment(ImplicitSequence(Text(this), other))
+    }
+
+    /**
+     * Returns a sequence containing this fragment and the given text.
+     */
+    public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
+        if (root is ImplicitSequence<*>) {
+            root.components += Text(query2)
+            return this
+        }
+        return SymbolFragment(ImplicitSequence(Text(query2), root))
+    }
+}
+
+/**
+ * Defines a scope where a [NameableLexerParser] that does not take an argument can be defined.
+ */
+public class NullaryLexerParserDefinition internal constructor(  // Argument never explicitly given
+    internal val base: NullaryLexerlessParserDefinition = NullaryLexerlessParserDefinition()
+) : LexerParserDefinition(), NullaryParserDefinition by base
+
+/**
+ * Defines a scope where a [NameableLexerParser] that takes one argument can be defined.
+ */
+public class UnaryLexerParserDefinition<ArgumentT> internal constructor( // Argument never explicitly given
+    internal val base: UnaryLexerlessParserDefinition<ArgumentT> = UnaryLexerlessParserDefinition()
+) : LexerParserDefinition(), UnaryParserDefinition<ArgumentT> by base

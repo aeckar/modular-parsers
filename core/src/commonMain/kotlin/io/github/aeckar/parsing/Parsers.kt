@@ -86,6 +86,8 @@ public sealed interface Parser {
     public fun parse(input: RawSource): Node<*>?
 }
 
+// The following extensions used by ParserDefinition
+
 internal val Parser.parserSymbols: Map<String, NameableSymbol<*>> get() = when (this) {
     is NameableLexerlessParser -> parserSymbols
     is NameableLexerParser -> parserSymbols
@@ -102,6 +104,15 @@ internal val Parser.listeners get() = when (this) {
     is NamedUnaryLexerlessParser<*> -> unnamed.listeners
     is NamedNullaryLexerParser -> unnamed.listeners
     is NamedUnaryLexerParser<*> -> unnamed.listeners
+}
+
+internal val Parser.exportedSymbols: Map<String, NamedSymbol<*>> get() = when (this) {
+    is NameableLexerlessParser -> exportedSymbols
+    is NameableLexerParser -> exportedSymbols
+    is NamedNullaryLexerlessParser -> unnamed.exportedSymbols
+    is NamedUnaryLexerlessParser<*> -> unnamed.exportedSymbols
+    is NamedNullaryLexerParser -> unnamed.exportedSymbols
+    is NamedUnaryLexerParser<*> -> unnamed.exportedSymbols
 }
 
 /**
@@ -185,6 +196,7 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: Argume
 public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Parser {
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
+    internal val exportedSymbols = def.exportedSymbols
 
     private val start = def.startDelegate.field
     private val skip = def.skipDelegate.field
@@ -274,6 +286,7 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
 
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
+    internal val exportedSymbols = def.exportedSymbols
 
     private val lexerSymbols = def.lexerSymbols
     private val start = def.startDelegate.field

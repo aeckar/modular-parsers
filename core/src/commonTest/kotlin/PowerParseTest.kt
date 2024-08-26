@@ -3,16 +3,16 @@ package io.github.aeckar.parsing
 import io.github.aeckar.parsing.typesafe.Sequence2
 import kotlin.test.Test
 
-@Suppress("UNUSED_VARIABLE")
 private val textParser by parser {
     val char by junction()
-    val escape by '/' + of("tnr'//")
     val text by '\'' + multiple(char) + '\''
+    val escape by '\'' + multiple(char) + '\''
 
     char.actual = escape or of(!"\n'")
+
+    export(text)
 }
 
-@Suppress("UNUSED_VARIABLE")
 private val switchParser by parser {
     val escape by '/' + of("tnr/-//]")
     val char by escape or of(!"\n]")
@@ -23,6 +23,8 @@ private val switchParser by parser {
     val ranges by maybe(upToRange) + any(boundedRange or char) + maybe(atLeastRange) or
             catchAll
     val switch by maybe('~') + '[' + ranges + ']'
+
+    export(switch)
 }
 
 private val kombinator by parser {

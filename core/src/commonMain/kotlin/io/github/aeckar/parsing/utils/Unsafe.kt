@@ -20,8 +20,8 @@ internal inline fun <reified T> Any.fragileUnsafeCast(): T {
     return try {
         this as T
     } catch (e: ClassCastException) {
-        val r = this::class.qualifiedName
         val t = T::class.qualifiedName
+        val r = this::class.qualifiedName
         throw MalformedParserException("Cast to $t fails because object was cast to $r by user", e)
     }
 }
