@@ -1,7 +1,11 @@
+import com.android.build.gradle.internal.ide.kmp.KotlinAndroidSourceSetMarker.Companion.android
 import org.apache.velocity.VelocityContext
 import org.apache.velocity.app.VelocityEngine
 import org.apache.velocity.runtime.RuntimeConstants.RESOURCE_LOADERS
 import org.apache.velocity.runtime.resource.loader.FileResourceLoader
+import org.jetbrains.dokka.base.DokkaBase
+import org.jetbrains.dokka.base.DokkaBaseConfiguration
+import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -17,6 +21,7 @@ val ordinals = listOf(
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.dokka)
     id("module.publication")
 }
 
@@ -66,8 +71,20 @@ kotlin {
 android {
     namespace = "io.github.aeckar.parsing"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
+
     defaultConfig {
         minSdk = libs.versions.android.minSdk.get().toInt()
+    }
+}
+
+tasks.withType<DokkaTask>().configureEach {
+    dokkaSourceSets.configureEach {
+        includes.from("Module.md")
+    }
+
+    pluginConfiguration<DokkaBase, DokkaBaseConfiguration> {
+        footerMessage = "© 2024 Angel Eckardt"
+        separateInheritedMembers = true
     }
 }
 

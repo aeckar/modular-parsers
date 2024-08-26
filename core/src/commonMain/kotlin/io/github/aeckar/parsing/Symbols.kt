@@ -6,6 +6,11 @@ import io.github.aeckar.parsing.utils.*
 private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)" else toString()
 
 /**
+ * Returns the concatenation of the substrings of all elements in this list.
+ */
+private fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
+
+/**
  * Returns a string equal to this one with invisible characters expressed as their Kotlin escape character.
  */
 private fun String.withEscapes() = buildString {
@@ -147,13 +152,15 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
 
     override fun match(stream: ParserMetadata) = pivot(stream) {
         val matchExists = if (input is CharPivotIterator) {
-            literal.all { it == input.next() }
+            literal.all { input.hasNext() && it == input.next() }
+        } else if (input.isExhausted()) {
+            false
         } else {
-            this@Text.rawName == (input as TokenPivotIterator).next().name
+            this@Text.rawName == (input.next() as Token).name
         }
-        input.revertPosition()
+        input.revert()
         takeIf { matchExists }?.let {
-            input.advancePosition(charCount = literal.length, tokenCount = 1)
+            input.advance(if (input is CharPivotIterator) literal.length else 1)
             Node(this@Text, literal)
         }
     }
@@ -169,19 +176,21 @@ public class Switch internal constructor(
     private val ranges: List<CharRange>
 ) : SimpleSymbol<Switch>() {
     override fun match(stream: ParserMetadata) = pivot(stream) {
-        val substring: String
-        val matchExists = if (input is CharPivotIterator) {
+        var substring = ""
+        val matchExists = if (input.isExhausted()) {
+            false
+        } else if (input is CharPivotIterator) {
             val next = input.peek()
             substring = next.toString()
             ranges.none { next in it }
         } else {
-            val next = (input as TokenPivotIterator).peek()
+            val next = input.peek() as Token
             substring = next.substring
             this@Switch.rawName != next.name
         }
-        input.revertPosition()
+        input.revert()
         takeIf { matchExists }?.let {
-            input.advancePosition(1)
+            input.advance(1)
             Node(this@Switch, substring)
         }
     }
@@ -215,10 +224,10 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
             subMatch = query.matchOnce().unsafeCast()
         }
         debug { "Query matched ${children.size} times" }
-        input.revertPosition()
+        input.revert()
         takeIf { children.isNotEmpty() }?.let {
             val result = RepetitionNode(this@Repetition, children.concatenate(), children)
-            input.advancePosition(charCount = result.substring.length, tokenCount = result.branches.size)
+            input.advance(if (input is CharPivotIterator) result.substring.length else result.branches.size)
             result
         }
     }
@@ -325,15 +334,15 @@ public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal 
         val first = components.next().resolve()
         if (first !is ImplicitJunction<*> && first in symbolCallStack) {    // Prevents infinite recursion
             debug { "Recursion found for non-junction query ${first.rawName}" }
-            input.removeSavedPosition()
+            input.removeSave()
             return@pivot null
         }
 
         // First iteration
-        input.savePosition()
+        input.save()
         var subMatch = first.matchOnce()
         if (subMatch == null) {
-            input.revertPosition()
+            input.revert()
             return@pivot null
         }
         val branches = mutableListOf<Node<*>>()
@@ -344,12 +353,12 @@ public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal 
             val component = components.next()
             subMatch = component.matchOnce()
             if (subMatch == null) {
-                input.revertPosition()
+                input.revert()
                 return@pivot null
             }
             branches += subMatch.also { it.skipIgnored() }
         }
-        input.removeSavedPosition()
+        input.removeSave()
         SequenceNode(typed, branches.concatenate(), branches)
     }
 

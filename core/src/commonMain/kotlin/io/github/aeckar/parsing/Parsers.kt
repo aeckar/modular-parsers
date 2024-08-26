@@ -155,7 +155,7 @@ public sealed interface NamedUnaryParser<ArgumentT> : NamedParser, UnaryParser<A
  * The argument passed to this function is also passed to each listener.
  * @return the root node of the resulting AST
  */
-public fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): Node<*>? {
+public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): Node<*>? {
     initializer?.let { it(argument) }
     return parse(input)?.walk { listenerStrategy(argument, it) }
 }
@@ -163,7 +163,7 @@ public fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input:
 /**
  * See [UnaryParser.invoke] for details.
  */
-public fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): Node<*>? {
+public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): Node<*>? {
     initializer?.let { it(argument) }
     return parse(input)?.walk { listenerStrategy(argument, it) }
 }
@@ -290,15 +290,15 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = parse(StringPivotIterator(input))
-    final override fun parse(input: RawSource): Node<*>? = parse(SourcePivotIterator(input))
+    final override fun parse(input: String): Node<*>? = parse(input.pivotIterator())
+    final override fun parse(input: RawSource): Node<*>? = parse(input.pivotIterator())
 
     // Defensive copy
-    final override fun tokenize(input: String): List<Token> = tokenize(StringPivotIterator(input)).toList()
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(SourcePivotIterator(input)).toList()
+    final override fun tokenize(input: String): List<Token> = tokenize(input.pivotIterator()).toList()
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.pivotIterator()).toList()
 
     private fun parse(input: CharPivotIterator): Node<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(TokenPivotIterator(tokenize(input))))
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(tokenize(input).pivotIterator()))
     }
 
     private fun tokenize(input: CharPivotIterator): List<Token> {

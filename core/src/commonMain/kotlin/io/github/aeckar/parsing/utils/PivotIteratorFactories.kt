@@ -10,22 +10,24 @@ private data class RawSourcePosition(val bufferSection: String, val sectionPosit
  * Returns an iterator pivoting over the elements in the list.
  */
 public fun <T> List<T>.pivotIterator(): PivotIterator<T> = object : SimplePivotIterator<T>() {
-    override fun hasNext(): Boolean = position < size
+    override fun hasNext() = position < size
+    override fun isExhausted() = position >= size
     override fun next(): T = peek().also { ++position }
     override fun peek(): T = this@pivotIterator[position]
 }
 
 /**
- * An input stream backed by a string.
+ * Returns an iterator pivoting over the characters in this string.
  */
 public fun String.pivotIterator(): CharPivotIterator = object : SimplePivotIterator<Char>(), CharPivotIterator {
     override fun hasNext() = position < length
+    override fun isExhausted() = position >= length
     override fun nextChar() = peek().also { ++position }
     override fun peekChar() = this@pivotIterator[position]
 }
 
 /**
- * An iterator pivoting over the characters loaded from this source.
+ * Returns an iterator pivoting over the characters loaded from this source.
  *
  * If this is [closed][RawSource.close],
  * any function called from the returned instance throws an [IllegalStateException].
@@ -57,7 +59,6 @@ public fun RawSource.pivotIterator(): CharPivotIterator = object : CharPivotIter
     }
 
     override fun hasNext() = sectionPosition < bufferSection.length || loadNextSection()
-
     override fun nextChar() = peek().also { ++sectionPosition }
 
     override fun peekChar(): Char {

@@ -15,10 +15,13 @@ public interface Nameable {
 
 /**
  * An object with a name.
- *
- * Created when a [Nameable] object is delegated to a property.
- * The [name] of each instance of this class is the same as the name of the property being delegated to.
  */
 public interface Named {
+    /**
+     * The name of this object.
+     *
+     * If this instance was produced by delegating a [Nameable] object to a property,
+     * this string is the same as the name of that property.
+     */
     public val name: String
 }

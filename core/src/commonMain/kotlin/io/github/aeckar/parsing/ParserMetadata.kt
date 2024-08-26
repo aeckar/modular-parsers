@@ -1,9 +1,6 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.utils.PivotIterator
-import io.github.aeckar.parsing.utils.StringPivotIterator
-import io.github.aeckar.parsing.utils.SourcePivotIterator
-import io.github.aeckar.parsing.utils.StreamExhaustedSignal
+import io.github.aeckar.parsing.utils.*
 import kotlinx.io.RawSource
 
 /**
@@ -22,13 +19,8 @@ internal inline fun <MatchT : Node<*>?> Symbol.pivot(
         debugFail { "Previous attempt failed" }
         return null
     }
-    stream.input.savePosition()
-    val result = try {
-        block(stream)
-    } catch (_: StreamExhaustedSignal) {
-        debugFail { "Stream exhausted" }
-        null
-    }
+    stream.input.save()
+    val result = block(stream)
     if (result != null) {
         debugSuccess(result)
     } else {
@@ -45,14 +37,14 @@ internal inline fun <MatchT : Node<*>?> Symbol.pivot(
  * @param failCache symbols that have previously been failed to match (cleared by [ImplicitSequence])
  */
 internal class ParserMetadata private constructor(
-    val input: PivotIterator,
+    val input: PivotIterator<*>,
     val skip: Symbol?,
     val symbolCallStack: MutableList<Symbol> = mutableListOf(),
     val failCache: MutableSet<Symbol> = mutableSetOf()
 ) {
-    constructor(input: String, skip: Symbol?) : this(StringPivotIterator(input), skip)
-    constructor(input: RawSource, skip: Symbol?) : this(SourcePivotIterator(input), skip)
-    constructor(input: PivotIterator) : this(input, null)
+    constructor(input: String, skip: Symbol?) : this(input.pivotIterator(), skip)
+    constructor(input: RawSource, skip: Symbol?) : this(input.pivotIterator(), skip)
+    constructor(input: PivotIterator<*>) : this(input, null)
 
     fun Symbol.matchOnce(): Node<*>? = match(this@ParserMetadata)
 

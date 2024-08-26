@@ -2,7 +2,6 @@
 package io.github.aeckar.parsing.typesafe
 
 import io.github.aeckar.parsing.*
-import io.github.aeckar.parsing.utils.ParserMetadata
 import io.github.aeckar.parsing.utils.unsafeCast
 
 /**

@@ -7,6 +7,7 @@ kotlinx-collections-immutable = "0.3.7"
 kotlin-logging = "7.0.0"
 android-minSdk = "24"
 android-compileSdk = "34"
+dokka = "1.9.20"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -18,3 +19,4 @@ kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "kot
 [plugins]
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

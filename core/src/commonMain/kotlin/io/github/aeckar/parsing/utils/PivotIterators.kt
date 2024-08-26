@@ -13,8 +13,7 @@ public interface PivotIterator<ElementT> : Iterator<ElementT> {
     /**
      * Saves the current cursor position.
      *
-     * Can be called more than once to save multiple positions,
-     * even if the iterator has been exhausted ([hasNext]` == false`)
+     * Can be called more than once to save multiple positions, even if [isExhausted] is true.
      */
     public fun save()
 
@@ -35,6 +34,14 @@ public interface PivotIterator<ElementT> : Iterator<ElementT> {
      * Returns the next element in the sequence without advancing the current cursor position.
      */
     public fun peek(): ElementT
+
+    /**
+     * Returns true if no more elements can be read from this iterator
+     * without reverting to a previously saved cursor position.
+     *
+     * Equal in value to `!`[hasNext]`.
+     */
+    public fun isExhausted(): Boolean = !hasNext()
 }
 
 /**

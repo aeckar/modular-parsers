@@ -131,9 +131,9 @@ public class NullaryLexerlessParserDefinition internal constructor(
         origin.ensureExtensionCandidate(name)
         listeners[name] = NullarySymbolListener {
             with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
-                this@NullaryListener()
+                this@NullarySymbolListener()
             }
-            with(action) { this@NullaryListener() }
+            with(action) { this@NullarySymbolListener() }
         }
     }
 }
@@ -163,9 +163,9 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
         origin.ensureExtensionCandidate(name)
         listeners[name] = UnarySymbolListener {
             with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
-                this@UnaryListener()
+                this@UnarySymbolListener()
             }
-            with(action) { this@UnaryListener(it) }
+            with(action) { this@UnarySymbolListener(it) }
         }
     }
 
@@ -175,9 +175,9 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
         origin.ensureExtensionCandidate(name)
         listeners[name] = UnarySymbolListener {
             with(origin.listeners.getValue(name).unsafeCast<UnarySymbolListener<MatchT, in ArgumentT>>()) {
-                this@UnaryListener(it)
+                this@UnarySymbolListener(it)
             }
-            with(action) { this@UnaryListener(it) }
+            with(action) { this@UnarySymbolListener(it) }
         }
     }
 

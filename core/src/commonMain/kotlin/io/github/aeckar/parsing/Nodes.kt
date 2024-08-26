@@ -10,11 +10,6 @@ import kotlin.jvm.JvmName
 // Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
 
 /**
- * Returns the concatenation of the substrings of all elements in this list.
- */
-internal fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
-
-/**
  * A matched substring in a given input produced according to the matching logic of a symbol.
  *
  * When nodes are combined into a hierarchy, they form an [abstract syntax tree][Parser.parse].
@@ -24,6 +19,10 @@ internal fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
  */
 public open class Node<MatchT : Symbol> internal constructor(
     internal var source: MatchT,
+
+    /**
+     * The substring matched by the symbol that produced this node.
+     */
     public val substring: String
 ) {
     /**
