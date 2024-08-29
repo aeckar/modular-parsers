@@ -14,6 +14,11 @@ public fun <T> List<T>.pivotIterator(): PivotIterator<T> = object : SimplePivotI
     override fun isExhausted() = position >= size
     override fun next(): T = peek().also { ++position }
     override fun peek(): T = this@pivotIterator[position]
+
+    override fun toString() = buildString {
+        append(if (isExhausted()) "<iterator exhausted>" else "${peek()}")
+        append(" (index = $position)")
+    }
 }
 
 /**
@@ -24,6 +29,11 @@ public fun String.pivotIterator(): CharPivotIterator = object : SimplePivotItera
     override fun isExhausted() = position >= length
     override fun nextChar() = peek().also { ++position }
     override fun peekChar() = this@pivotIterator[position]
+
+    override fun toString() = buildString {
+        append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
+        append(" (index = $position)")
+    }
 }
 
 /**
@@ -64,6 +74,11 @@ public fun RawSource.pivotIterator(): CharPivotIterator = object : CharPivotIter
     override fun peekChar(): Char {
         verifyBufferAndPosition()
         return bufferSection[sectionPosition]
+    }
+
+    override fun toString() = buildString {
+        append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
+        append(" (section = $bufferSection, index = $sectionPosition)")
     }
 
     private fun verifyBufferAndPosition() {

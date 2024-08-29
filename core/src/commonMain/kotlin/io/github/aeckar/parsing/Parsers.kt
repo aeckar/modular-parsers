@@ -1,9 +1,12 @@
+@file:Suppress("LeakingThis")   // Parser ID hashcode
+
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.utils.*
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.io.RawSource
+import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
 private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
@@ -106,15 +109,6 @@ internal val Parser.listeners get() = when (this) {
     is NamedUnaryLexerParser<*> -> unnamed.listeners
 }
 
-internal val Parser.exportedSymbols: Map<String, NamedSymbol<*>> get() = when (this) {
-    is NameableLexerlessParser -> exportedSymbols
-    is NameableLexerParser -> exportedSymbols
-    is NamedNullaryLexerlessParser -> unnamed.exportedSymbols
-    is NamedUnaryLexerlessParser<*> -> unnamed.exportedSymbols
-    is NamedNullaryLexerParser -> unnamed.exportedSymbols
-    is NamedUnaryLexerParser<*> -> unnamed.exportedSymbols
-}
-
 /**
  * A named parser.
  */
@@ -196,7 +190,7 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: Argume
 public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Parser {
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
-    internal val exportedSymbols = def.exportedSymbols
+    internal val id = hashCode()
 
     private val start = def.startDelegate.field
     private val skip = def.skipDelegate.field
@@ -205,6 +199,7 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Pa
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
+        debug { "Defined with parser symbols $parserSymbols" }
     }
 
     final override fun parse(input: String): Node<*>? {
@@ -214,6 +209,8 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Pa
     final override fun parse(input: RawSource): Node<*>? {
         return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
     }
+
+    final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
 }
 
 /**
@@ -222,8 +219,11 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Pa
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
 ) : NameableLexerlessParser(def), Nameable, NullaryParser {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerlessParser {
-        return NamedNullaryLexerlessParser(property.name, this)
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedNullaryLexerlessParser> {
+        return NamedNullaryLexerlessParser(property.name, this).readOnlyProperty()
     }
 }
 
@@ -234,6 +234,10 @@ public class NamedNullaryLexerlessParser internal constructor(
     override val name: String,
     internal val unnamed: NullaryLexerlessParser
 ) : NamedNullaryParser, NullaryParser by unnamed {
+    init {
+        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+    }
+
     override fun toString(): String = name
 }
 
@@ -246,8 +250,11 @@ public class UnaryLexerlessParser<ArgumentT> internal constructor(
 ) : NameableLexerlessParser(def), Nameable, UnaryParser<ArgumentT> {
     internal val initializer = def.initializer
 
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerlessParser<ArgumentT> {
-        return NamedUnaryLexerlessParser(property.name, this)
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedUnaryLexerlessParser<ArgumentT>> {
+        return NamedUnaryLexerlessParser(property.name, this).readOnlyProperty()
     }
 }
 
@@ -258,6 +265,10 @@ public class NamedUnaryLexerlessParser<ArgumentT> internal constructor(
     override val name: String,
     internal val unnamed: UnaryLexerlessParser<ArgumentT>
 ) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed {
+    init {
+        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+    }
+
     override fun toString(): String = name
 }
 
@@ -286,7 +297,7 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
 
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
-    internal val exportedSymbols = def.exportedSymbols
+    internal val id = hashCode()
 
     private val lexerSymbols = def.lexerSymbols
     private val start = def.startDelegate.field
@@ -294,6 +305,8 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
+        debug { "Parser $id: Defined with parser symbols $parserSymbols" }
+        debug { "Parser $id: Defined with lexer symbols $lexerSymbols" }
     }
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy {
@@ -309,6 +322,8 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
     // Defensive copy
     final override fun tokenize(input: String): List<Token> = tokenize(input.pivotIterator()).toList()
     final override fun tokenize(input: RawSource): List<Token> = tokenize(input.pivotIterator()).toList()
+
+    final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
     private fun parse(input: CharPivotIterator): Node<*>? {
         return (start ?: raiseUndefinedStart()).match(ParserMetadata(tokenize(input).pivotIterator()))
@@ -350,8 +365,11 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
 ) : NameableLexerParser(def), Nameable, NullaryParser, Lexer {
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedNullaryLexerParser {
-        return NamedNullaryLexerParser(property.name, this)
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedNullaryLexerParser> {
+        return NamedNullaryLexerParser(property.name, this).readOnlyProperty()
     }
 }
 
@@ -362,6 +380,10 @@ public class NamedNullaryLexerParser internal constructor(
     override val name: String,
     internal val unnamed: NullaryLexerParser
 ) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed {
+    init {
+        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+    }
+
     override fun toString(): String = name
 }
 
@@ -373,8 +395,11 @@ public class UnaryLexerParser<ArgumentT> internal constructor(
 ) : NameableLexerParser(def), Nameable, UnaryParser<ArgumentT>, Lexer {
     internal val initializer = def.base.initializer
 
-    override fun getValue(thisRef: Any?, property: KProperty<*>): NamedUnaryLexerParser<ArgumentT> {
-        return NamedUnaryLexerParser(property.name, this)
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedUnaryLexerParser<ArgumentT>> {
+        return NamedUnaryLexerParser(property.name, this).readOnlyProperty()
     }
 }
 
@@ -385,5 +410,9 @@ public class NamedUnaryLexerParser<ArgumentT> internal constructor(
     override val name: String,
     internal val unnamed: UnaryLexerParser<ArgumentT>
 ) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed {
+    init {
+        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+    }
+
     override fun toString(): String = name
 }

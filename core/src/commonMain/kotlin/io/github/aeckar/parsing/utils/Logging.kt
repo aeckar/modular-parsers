@@ -1,0 +1,40 @@
+package io.github.aeckar.parsing.utils
+
+import io.github.aeckar.parsing.Node
+import io.github.oshai.kotlinlogging.*
+
+internal val logger = object : KLogger {
+    override val name: String
+        get() = ""
+
+    override fun at(level: Level, marker: Marker?, block: KLoggingEventBuilder.() -> Unit) {
+        println(KLoggingEventBuilder().apply(block).message)
+    }
+
+    override fun isLoggingEnabledFor(level: Level, marker: Marker?): Boolean {
+        return true
+    }
+
+}
+
+/**
+ * Prepends this object to the debug message.
+ */
+internal fun Any?.debug(lazyMessage: () -> String) = logger.debug { "$this: ${lazyMessage()}" }
+
+/**
+ * Prepends this object to the debug message.
+ */
+internal fun Any?.debugMatchFail(lazyReason: () -> String = { "" }) {
+    logger.debug {
+        val reason = lazyReason().takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""
+        "$this: Match failed$reason"
+    }
+}
+
+/**
+ * Prepends this object to the debug message.
+ */
+internal fun Any?.debugMatchSuccess(result: Node<*>) {
+    logger.debug { "$this: Match succeeded (substring = ${result.substring})"}
+}

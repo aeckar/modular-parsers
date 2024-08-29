@@ -9,8 +9,6 @@ private val textParser by parser {
     val escape by '\'' + multiple(char) + '\''
 
     char.actual = escape or of(!"\n'")
-
-    export(text)
 }
 
 private val switchParser by parser {
@@ -23,8 +21,6 @@ private val switchParser by parser {
     val ranges by maybe(upToRange) + any(boundedRange or char) + maybe(atLeastRange) or
             catchAll
     val switch by maybe('~') + '[' + ranges + ']'
-
-    export(switch)
 }
 
 private val kombinator by parser {

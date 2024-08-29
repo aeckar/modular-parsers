@@ -15,6 +15,9 @@ nexus-publish = { module = "io.github.gradle-nexus.publish-plugin:io.github.grad
 kotlinx-io = { module = "org.jetbrains.kotlinx:kotlinx-io-core", version.ref = "kotlinx-io" }
 kotlinx-collections-immutable = { module = "org.jetbrains.kotlinx:kotlinx-collections-immutable", version.ref = "kotlinx-collections-immutable" }
 kotlin-logging = { module = "io.github.oshai:kotlin-logging", version.ref = "kotlin-logging" }
+kotlin-logging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
+kotlin-logging-js = { module = "io.github.oshai:kotlin-logging-js", version.ref = "kotlin-logging" }
+kotlin-logging-linux-x64 = { module = "io.github.oshai:kotlin-logging-linuxx64", version.ref = "kotlin-logging" }
 
 [plugins]
 androidLibrary = { id = "com.android.library", version.ref = "agp" }

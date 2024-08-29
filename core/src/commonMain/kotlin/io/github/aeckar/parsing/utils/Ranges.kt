@@ -34,6 +34,12 @@ internal fun String.toRanges(): MutableList<CharRange> {
         }
     }
 
+    if (this.isEmpty()) {
+        throw MalformedParserException("Empty string cannot be used as a switch literal")
+    }
+    if (this == "-") {
+        return mutableListOf(Char.MIN_VALUE..Char.MAX_VALUE)
+    }
     val ranges = mutableListOf<CharRange>()
     val chars = iterator()
     while (chars.hasNext()) {
@@ -49,9 +55,10 @@ internal fun List<CharRange>.invertRanges(): List<CharRange> {
             if (range.last == Char.MAX_VALUE) {
                 throw MalformedParserException("Cannot invert all-inclusive switch range '\\u0000-\\uFFFF'")
             }
+            // fall-through
         } else {
             inverted += Char.MIN_VALUE..<range.first
-            if (range.last != Char.MAX_VALUE) {
+            if (range.last == Char.MAX_VALUE) {
                 continue
             }
         }

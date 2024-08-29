@@ -37,14 +37,56 @@ public abstract class Symbol internal constructor() : ParserComponent {
     internal abstract val rawName: String
 
     /**
+     * Returns null if this symbol is in the top of the fail stack, and logs the failure.
+     * Otherwise, performs the following:
+     * 1. Saves the current input position
+     * 2. Logs whether the symbol was matched or not
+     * 3. Appends this symbol to the top of the fail stack if not matched
+     * 4. Returns the result
+     */
+    internal inline fun <MatchT : Node<*>?> matching(
+        data: ParserMetadata,
+        crossinline block: () -> MatchT
+    ) = with(data) {
+        if (this@Symbol in failStack.last()) {
+            debugMatchFail { "Previous attempt failed" }
+            return@with null
+        }
+        input.save()
+        val result = block()
+        if (result != null) {
+            debugMatchSuccess(result)
+        } else {
+            debugMatchFail()
+            failStack.last() += this@Symbol
+        }
+        result
+    }
+
+    /**
+     * Performs the following:
+     * 1.
+     * 2.
+     * 3. todo
+     */
+    internal fun align(data: ParserMetadata) {
+        data.skip?.let {
+            debug { "Attempting match to skip ${data.skip}" }
+            it.match(data)
+        }
+        data.failStack.removeLast()
+
+    }
+
+    /**
      * If this symbol wraps another symbol, returned the wrapped instance.
      *
      * Applicable to [TypeSafeSymbol] and [NamedSymbol].
      */
     internal open fun resolve() = this
 
-    internal abstract fun match(stream: ParserMetadata): Node<*>?
-
+    internal abstract fun match(data: ParserMetadata): Node<*>?
+    
     final override fun toString(): String = rawName
 }
 
@@ -77,8 +119,8 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 
     final override fun resolve() = unnamed
 
-    final override fun match(stream: ParserMetadata) : Node<*>? {
-        return unnamed.match(stream)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+    final override fun match(data: ParserMetadata) : Node<*>? {
+        return unnamed.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
     }
 }
 
@@ -138,7 +180,7 @@ public sealed class TypeUnsafeSymbol<
  */
 public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<LexerSymbol>() {
     override fun resolve() = start.root.resolve()
-    override fun match(stream: ParserMetadata) = start.lex(stream)?.let { Node(this, it) }
+    override fun match(data: ParserMetadata) = start.lex(data)?.let { Node(this, it) }
     override fun resolveRawName() = start.rawName
 }
 
@@ -150,18 +192,19 @@ public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<Lex
 public class Text internal constructor(private val literal: String) : SimpleSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
-    override fun match(stream: ParserMetadata) = pivot(stream) {
+    override fun match(data: ParserMetadata) = matching(data) {
+        val input = data.input
         val matchExists = if (input is CharPivotIterator) {
             literal.all { input.hasNext() && it == input.next() }
         } else if (input.isExhausted()) {
             false
         } else {
-            this@Text.rawName == (input.next() as Token).name
+            rawName == (input.next() as Token).name
         }
         input.revert()
         takeIf { matchExists }?.let {
             input.advance(if (input is CharPivotIterator) literal.length else 1)
-            Node(this@Text, literal)
+            Node(this, literal)
         }
     }
 
@@ -175,23 +218,24 @@ public class Switch internal constructor(
     private val literal: String,    // Before optimization
     private val ranges: List<CharRange>
 ) : SimpleSymbol<Switch>() {
-    override fun match(stream: ParserMetadata) = pivot(stream) {
+    override fun match(data: ParserMetadata) = matching(data) {
+        val input = data.input
         var substring = ""
         val matchExists = if (input.isExhausted()) {
             false
         } else if (input is CharPivotIterator) {
             val next = input.peek()
             substring = next.toString()
-            ranges.none { next in it }
+            ranges.any { next in it }
         } else {
             val next = input.peek() as Token
             substring = next.substring
-            this@Switch.rawName != next.name
+            rawName != next.name
         }
         input.revert()
         takeIf { matchExists }?.let {
             input.advance(1)
-            Node(this@Switch, substring)
+            Node(this, substring)
         }
     }
 
@@ -207,11 +251,14 @@ public class Switch internal constructor(
 
 /**
  * A symbol matching another symbol one or more times in a row.
+ *
+ * If any one match is of an empty substring, no more matches are attempted.
  */
 public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
-    override fun match(stream: ParserMetadata) = pivot(stream) {
+    override fun match(data: ParserMetadata) = matching(data) {
+        val input = data.input
         val children = mutableListOf<Node<SubMatchT>>()
-        var subMatch: Node<SubMatchT>? = query.matchOnce().unsafeCast()
+        var subMatch: Node<SubMatchT>? = query.match(data).unsafeCast()
         debug { "Attempting matches to query ${query.rawName}" }
         while (subMatch != null) {
             children += subMatch
@@ -219,14 +266,14 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
                 debug { "End matches to query (matched substring is empty)" }
                 break
             }
-            debug { "Attempting match to skip $skip" }
-            skip!!.matchOnce()
-            subMatch = query.matchOnce().unsafeCast()
+            debug { "Attempting match to skip ${data.skip}" }
+            data.skip!!.match(data)
+            subMatch = query.match(data).unsafeCast()
         }
         debug { "Query matched ${children.size} times" }
         input.revert()
         takeIf { children.isNotEmpty() }?.let {
-            val result = RepetitionNode(this@Repetition, children.concatenate(), children)
+            val result = RepetitionNode(this, children.concatenate(), children)
             input.advance(if (input is CharPivotIterator) result.substring.length else result.branches.size)
             result
         }
@@ -241,10 +288,10 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     private val emptyMatch = OptionNode(this, "", null)
 
-    override fun match(stream: ParserMetadata): Node<*> {
+    override fun match(data: ParserMetadata): Node<*> {
         debug { "Attempting match to query ${query.rawName}" }
-        val result = query.match(stream)?.let { OptionNode(this@Option, it.substring, it.unsafeCast()) } ?: emptyMatch
-        debugSuccess(result)
+        val result = query.match(data)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
+        debugMatchSuccess(result)
         return result
     }
 
@@ -261,11 +308,11 @@ public class Inversion(
 ) : SimpleSymbol<Inversion>() {
     internal var origin: Parser by OnceAssignable(throws = ::IllegalStateException)
 
-    override fun match(stream: ParserMetadata) = pivot(stream) {
+    override fun match(data: ParserMetadata) = matching(data) {
         origin.parserSymbols.values.asSequence()
             .mapNotNull {
                 debug { "Attempting match to query ${it.rawName}" }
-                it.matchOnce()
+                it.match(data)
             }
             .firstOrNull()
     }
@@ -285,17 +332,17 @@ public class ImplicitJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal 
         components += option2
     }
 
-    override fun match(stream: ParserMetadata): Node<*>? {
+    override fun match(data: ParserMetadata): Node<*>? {
         debug { "Attempting match" }
-        if (this in stream.failCache) {
-            debugFail { "Previous attempt failed" }
+        if (this in data.failCache) {
+            debugMatchFail { "Previous attempt failed" }
             return null
         }
         return components.asSequence()
-            .filter { it !in stream.symbolCallStack && it !in stream.failCache }
+            .filter { it !in data.callStack && it !in data.failCache }
             .map {
                 debug { "Attempting match to query ${it.rawName}" }
-                it.match(stream)
+                it.match(data)
             }
             .withIndex()
             .find { it.value != null }
@@ -318,12 +365,14 @@ public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal 
         components += query2
     }
 
-    override fun match(stream: ParserMetadata) = pivot(stream) {
+    override fun match(data: ParserMetadata) = matching(data) {
+        val input = data.input
+
         fun Node<*>.skipIgnored() {
             if (input is CharPivotIterator) {
                 if (this.substring.isNotEmpty()) {
-                    debug { "Attempting match to skip $skip" }
-                    skip!!.matchOnce()
+                    debug { "Attempting match to skip ${data.skip}" }
+                    data.skip!!.match(data)
                 } else {
                     debug { "Match to skip ignored (matched substring is empty)" }
                 }
@@ -332,29 +381,28 @@ public class ImplicitSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal 
 
         val components = components.iterator()
         val first = components.next().resolve()
-        if (first !is ImplicitJunction<*> && first in symbolCallStack) {    // Prevents infinite recursion
+        if (first !is ImplicitJunction<*> && first in callStack) {    // Prevents infinite recursion
             debug { "Recursion found for non-junction query ${first.rawName}" }
             input.removeSave()
-            return@pivot null
+            return@matching null
         }
 
         // First iteration
         input.save()
-        var subMatch = first.matchOnce()
+        var subMatch = first.match(data)
         if (subMatch == null) {
             input.revert()
-            return@pivot null
+            return@matching null
         }
         val branches = mutableListOf<Node<*>>()
         branches += subMatch.also { it.skipIgnored() }
 
-        failCache.clear()
         while (components.hasNext()) {
             val component = components.next()
-            subMatch = component.matchOnce()
+            subMatch = component.match(data)
             if (subMatch == null) {
                 input.revert()
-                return@pivot null
+                return@matching null
             }
             branches += subMatch.also { it.skipIgnored() }
         }

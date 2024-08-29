@@ -4,6 +4,7 @@ import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 import io.github.aeckar.parsing.utils.toRanges
 import io.github.aeckar.parsing.utils.unsafeCast
+import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
 // ------------------------------------ abstract parser definitions ------------------------------------
@@ -27,7 +28,6 @@ public sealed class ParserDefinition {
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
     internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
-    internal val exportedSymbols = mutableMapOf<String, NamedSymbol<*>>()
     internal val inversionSymbols = mutableSetOf<Inversion>()
 
     /**
@@ -42,22 +42,14 @@ public sealed class ParserDefinition {
     // ------------------------------ symbol definition & import/export ------------------------------
 
     /**
-     * Enables the [import] of this symbol from other parsers.
-     */
-    public fun export(symbol: NamedSymbol<*>) {
-        exportedSymbols[symbol.name] = symbol
-    }
-
-
-    /**
      * Assigns a name to this symbol.
      *
      * Doing this for multiple named symbols is legal.
      */
-    public operator fun <S : NameableSymbol<out S>> NameableSymbol<out S>.getValue(
+    public operator fun <S : NameableSymbol<out S>> NameableSymbol<out S>.provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
-    ): NamedSymbol<S> {
+    ): ReadOnlyProperty<Nothing?, NamedSymbol<S>> {
         val name = property.name
         if (this is TypeUnsafeSymbol<*, *>) {  // Ensure implicit symbol itself is not used for parsing
             implicitSymbols[name] = null
@@ -67,7 +59,7 @@ public sealed class ParserDefinition {
             }
             parserSymbols[name] = this
         }
-        return NamedSymbol(name, this)
+        return NamedSymbol(name, this).readOnlyProperty()
     }
 
     /**
@@ -105,16 +97,16 @@ public sealed class ParserDefinition {
     public abstract inner class SymbolImport<ForeignT : ForeignSymbol<*>> : Nameable {
         internal abstract val origin: Parser
 
-        abstract override fun getValue(thisRef: Any?, property: KProperty<*>): ForeignT
+        abstract override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Nothing?, Named>
 
         protected fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                origin.exportedSymbols.getValue(name)
+                origin.parserSymbols.getValue(name)
             } catch (e: NoSuchElementException) {
                 throw MalformedParserException("Symbol '$name' is not defined in parser '$origin'", e)
             }
-            parserSymbols[name] = symbol.unnamed
-            return symbol
+            parserSymbols[name] = symbol
+            return NamedSymbol(name, symbol)
         }
     }
 
@@ -135,8 +127,12 @@ public sealed class ParserDefinition {
     public inner class NullarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>> internal constructor(
         override val origin: NullaryParser
     ) : SymbolImport<NullaryForeignSymbol<UnnamedT>>() {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): NullaryForeignSymbol<UnnamedT> {
-            return NullaryForeignSymbol(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+        override fun provideDelegate(
+            thisRef: Any?,
+            property: KProperty<*>
+        ): ReadOnlyProperty<Nothing?, NullaryForeignSymbol<UnnamedT>> {
+            return NullaryForeignSymbol<UnnamedT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+                .readOnlyProperty()
         }
     }
 
@@ -146,8 +142,12 @@ public sealed class ParserDefinition {
     public inner class UnarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>, ArgumentT> internal constructor(
         override val origin: UnaryParser<ArgumentT>
     ) : SymbolImport<UnaryForeignSymbol<UnnamedT, ArgumentT>>() {
-        override fun getValue(thisRef: Any?, property: KProperty<*>): UnaryForeignSymbol<UnnamedT, ArgumentT> {
-            return UnaryForeignSymbol(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+        override fun provideDelegate(
+            thisRef: Any?,
+            property: KProperty<*>
+        ): ReadOnlyProperty<Nothing?, UnaryForeignSymbol<UnnamedT, ArgumentT>> {
+            return UnaryForeignSymbol<UnnamedT, ArgumentT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+                .readOnlyProperty()
         }
     }
 
@@ -558,8 +558,11 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     /**
      * Assigns a [LexerSymbol] matching this fragment to the property being delegated to.
      */
-    public operator fun SymbolFragment.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
-        return NamedSymbol(symbol.name, LexerSymbol(this))
+    public operator fun SymbolFragment.provideDelegate(
+        thisRef: Any?,
+        symbol: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedSymbol<LexerSymbol>> {
+        return NamedSymbol(symbol.name, LexerSymbol(this)).readOnlyProperty()
     }
 
     // ------------------------------ text & switches ------------------------------

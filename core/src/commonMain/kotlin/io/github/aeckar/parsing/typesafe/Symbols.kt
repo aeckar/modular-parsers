@@ -15,8 +15,8 @@ public abstract class TypeSafeSymbol<
 > internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
     final override fun resolve() = untyped
 
-    final override fun match(stream: ParserMetadata): Node<*>? {
-        return untyped.match(stream)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+    final override fun match(data: ParserMetadata): Node<*>? {
+        return untyped.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
     }
 
     final override fun resolveRawName() = untyped.rawName

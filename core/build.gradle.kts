@@ -62,6 +62,7 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
+                runtimeOnly(libs.kotlin.logging.jvm)
             }
         }
     }

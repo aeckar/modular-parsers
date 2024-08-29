@@ -4,7 +4,7 @@ package io.github.aeckar.parsing.utils
  * A barebones implementation of a first-in-first-out integer stack.
  */
 internal class IntStack {
-    private var size: Int = 0
+    private var size: Int = 10
     private var data: IntArray = IntArray(size)
 
     fun last() = data[size - 1]
