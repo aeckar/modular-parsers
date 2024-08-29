@@ -1,7 +1,5 @@
 package io.github.aeckar.parsing.typesafe
 
-import io.github.aeckar.parsing.ImplicitJunction
-import io.github.aeckar.parsing.ImplicitSequence
 import io.github.aeckar.parsing.Node
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList

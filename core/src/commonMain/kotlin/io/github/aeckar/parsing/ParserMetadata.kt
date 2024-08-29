@@ -10,7 +10,8 @@ import kotlinx.io.RawSource
  * @param input a character or token stream that instances of this class delegate to
  * @param skip the skip symbol of the parser
  * @param callStack a stack of symbols that have been called, including the current one
- * @param failStack symbols that have been failed to match at each subsequent position during parsing
+ * @param failStack symbols that have been failed to match at each subsequent position during parsing.
+ * For each match to a non-empty substring, the stack grows. During backtracking, it shrinks
  */
 internal class ParserMetadata private constructor(
     val input: PivotIterator<*>,

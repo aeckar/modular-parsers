@@ -47,9 +47,7 @@ private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
 private fun ParserDefinition.resolveSymbols(): Map<String, NameableSymbol<*>> {
     val allSymbols = HashMap<String, NameableSymbol<*>>(parserSymbols.size + implicitSymbols.size)
     implicitSymbols.forEach { (name, symbol) ->
-        if (symbol == null) {
-            throw MalformedParserException("Implicit symbol '$name' is undefined")
-        }
+        symbol ?: throw MalformedParserException("Implicit symbol '$name' is undefined")
         allSymbols[name] = symbol
     }
     allSymbols += parserSymbols

@@ -6,24 +6,25 @@ import kotlinx.collections.immutable.toImmutableList
 #define($nodeFragileUnsafeCast)fragileUnsafeCast<${identifier}Node>()#end
 #define($nodeReceiver)Node<$identifier$n<#typeArguments("E" "")>>#end
 #define($typeSafeTuple)TypeSafeTuple$n<#typeArguments("Node<E" ">")>#end
+#define($components)#if($identifier == "Junction")options#else#evaluate("queries")#end#end
 #macro(classTypeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
 #macro(typeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
 #macro(forEachOrdinal $template)#foreach($ordinal in $ordinals)#if($foreach.count > $n)#break#end#set($capitalOrdinal = $capitalizeFirstChar.invoke($ordinal))#evaluate($template)#end#end
-#macro(addToUntyped $varName $suffix)untyped.apply { components += ${varName}$nPlus1$suffix }.unsafeCast()#end
+#macro(addToUntyped $varName $suffix)untyped.apply { $components += ${varName}$nPlus1$suffix }.unsafeCast()#end
 #set($nPlus1 = $n + 1)
 
 import io.github.aeckar.parsing.Symbol
 import io.github.aeckar.parsing.Node
-import io.github.aeckar.parsing.Implicit$identifier
+import io.github.aeckar.parsing.TypeUnsafe$identifier
 import io.github.aeckar.parsing.Text
 import io.github.aeckar.parsing.utils.unsafeCast
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
 /**
-* A #if($identifier == "Junction")junction#else#evaluate("sequence")#end with $n components.
+* A #if($identifier == "Junction")junction#else#evaluate("sequence")#end with $n $components.
 */
 public class $identifier$n<#classTypeArguments("E" " : Symbol")> internal constructor(
-    untyped: Implicit$identifier<$identifier$n<#typeArguments("E" "")>>
+    untyped: TypeUnsafe$identifier<$identifier$n<#typeArguments("E" "")>>
 ) : TypeSafe$identifier<$identifier$n<#typeArguments("E" "")>>(untyped)#if($n != $typeSafeCount)#if($identifier == "Junction") {
     /**
      * Adds the text as an option in this junction.

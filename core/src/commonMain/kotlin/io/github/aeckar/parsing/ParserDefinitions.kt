@@ -183,14 +183,14 @@ public sealed class ParserDefinition {
      *
      * Because the types of the options are erased, they cannot be accessed within listeners.
      */
-    public fun junction(): ImplicitJunction<*> = ImplicitJunction()
+    public fun junction(): TypeUnsafeJunction<*> = TypeUnsafeJunction()
 
     /**
      * Returns a sequence that can be defined after being delegated to a property.
      *
      * Because the types of the queries are erased, they cannot be accessed within listeners.
      */
-    public fun sequence(): ImplicitSequence<*> = ImplicitSequence()
+    public fun sequence(): TypeUnsafeSequence<*> = TypeUnsafeSequence()
 
     // ------------------------------ text & switches ------------------------------
 
@@ -252,7 +252,7 @@ public sealed class ParserDefinition {
     public infix fun <S1 : Symbol, S2 : Symbol> S1.or(option2: S2): Junction2<S1, S2> = toJunction(this, option2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
-        return Junction2(ImplicitJunction(option1, option2).unsafeCast())
+        return Junction2(TypeUnsafeJunction(option1, option2).unsafeCast())
     }
 
     // ------------------------------ sequences ------------------------------
@@ -263,7 +263,7 @@ public sealed class ParserDefinition {
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
-        return Sequence2(ImplicitSequence(query1, query2).unsafeCast())
+        return Sequence2(TypeUnsafeSequence(query1, query2).unsafeCast())
     }
 }
 
@@ -650,15 +650,15 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
-        if (root is ImplicitJunction<*>) {
-            root.components += other
+        if (root is TypeUnsafeJunction<*>) {
+            root.options += other
             return this
         }
-        if (other is ImplicitJunction<*>) {
-            other.components += root
+        if (other is TypeUnsafeJunction<*>) {
+            other.options += root
             return option2
         }
-        return SymbolFragment(ImplicitJunction(root, other))
+        return SymbolFragment(TypeUnsafeJunction(root, other))
     }
 
     /**
@@ -666,22 +666,22 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
-        if (other is ImplicitJunction<*>) {
-            other.components += Text(this)
+        if (other is TypeUnsafeJunction<*>) {
+            other.options += Text(this)
             return option2
         }
-        return SymbolFragment(ImplicitJunction(Text(this), other))
+        return SymbolFragment(TypeUnsafeJunction(Text(this), other))
     }
 
     /**
      * Returns a junction of this fragment and the given text.
      */
     public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
-        if (root is ImplicitJunction<*>) {
-            root.components += Text(option2)
+        if (root is TypeUnsafeJunction<*>) {
+            root.options += Text(option2)
             return this
         }
-        return SymbolFragment(ImplicitJunction(Text(option2), root))
+        return SymbolFragment(TypeUnsafeJunction(Text(option2), root))
     }
 
     // ------------------------------ sequences ------------------------------
@@ -691,15 +691,15 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
-        if (root is ImplicitSequence<*>) {
-            root.components += other
+        if (root is TypeUnsafeSequence<*>) {
+            root.queries += other
             return this
         }
-        if (other is ImplicitSequence<*>) {
-            other.components += root
+        if (other is TypeUnsafeSequence<*>) {
+            other.queries += root
             return query2
         }
-        return SymbolFragment(ImplicitSequence(root, other))
+        return SymbolFragment(TypeUnsafeSequence(root, other))
     }
 
     /**
@@ -707,22 +707,22 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
-        if (other is ImplicitSequence<*>) {
-            other.components += Text(this)
+        if (other is TypeUnsafeSequence<*>) {
+            other.queries += Text(this)
             return query2
         }
-        return SymbolFragment(ImplicitSequence(Text(this), other))
+        return SymbolFragment(TypeUnsafeSequence(Text(this), other))
     }
 
     /**
      * Returns a sequence containing this fragment and the given text.
      */
     public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
-        if (root is ImplicitSequence<*>) {
-            root.components += Text(query2)
+        if (root is TypeUnsafeSequence<*>) {
+            root.queries += Text(query2)
             return this
         }
-        return SymbolFragment(ImplicitSequence(Text(query2), root))
+        return SymbolFragment(TypeUnsafeSequence(Text(query2), root))
     }
 }
 

@@ -13,7 +13,7 @@ public abstract class TypeSafeSymbol<
     TypeUnsafeT : TypeUnsafeSymbol<InheritorT, TypeUnsafeT>,
     InheritorT : TypeSafeSymbol<TypeUnsafeT, InheritorT>
 > internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
-    final override fun resolve() = untyped
+    final override fun unwrap() = untyped
 
     final override fun match(data: ParserMetadata): Node<*>? {
         return untyped.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
@@ -26,8 +26,8 @@ public abstract class TypeSafeSymbol<
  * A type-safe junction wrapper.
  */
 public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>> internal constructor(
-    untyped: ImplicitJunction<InheritorT>
-) : TypeSafeSymbol<ImplicitJunction<InheritorT>, InheritorT>(untyped) {
+    untyped: TypeUnsafeJunction<InheritorT>
+) : TypeSafeSymbol<TypeUnsafeJunction<InheritorT>, InheritorT>(untyped) {
     init {
         untyped.typed = this
     }
@@ -37,8 +37,8 @@ public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>
  * A type-safe sequence wrapper.
  */
 public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>> internal constructor(
-    untyped: ImplicitSequence<InheritorT>
-) : TypeSafeSymbol<ImplicitSequence<InheritorT>, InheritorT>(untyped) {
+    untyped: TypeUnsafeSequence<InheritorT>
+) : TypeSafeSymbol<TypeUnsafeSequence<InheritorT>, InheritorT>(untyped) {
     init {
         untyped.typed = this
     }

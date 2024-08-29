@@ -90,7 +90,7 @@ internal class RepetitionNode<SubMatchT : Symbol> internal constructor(
  * The index of the option matched by the symbol emitting this token.
  */
 @get:JvmName("matchOrdinal\$ImplicitJunction")
-public val Node<out ImplicitJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
+public val Node<out TypeUnsafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
 
 /**
  * The index of the option matched by the symbol emitting this token.
