@@ -1,7 +1,0 @@
-$dokka.format:html-v1
-$dokka.linkExtension:html
-
-module:core
-io.github.aeckar.parsing
-io.github.aeckar.parsing.typesafe
-io.github.aeckar.parsing.utils
