@@ -15,7 +15,7 @@ import kotlinx.io.RawSource
  */
 internal class ParserMetadata private constructor(
     val input: PivotIterator<*>,
-    val skip: Symbol?,
+    var skip: Symbol?,
     val callStack: MutableList<Symbol> = mutableListOf(),
     val failStack: MutableList<MutableList<Symbol>> = mutableListOf(mutableListOf())
 ) {

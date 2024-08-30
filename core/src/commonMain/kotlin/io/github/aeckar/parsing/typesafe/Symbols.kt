@@ -12,14 +12,14 @@ import io.github.aeckar.parsing.utils.unsafeCast
 public abstract class TypeSafeSymbol<
     TypeUnsafeT : TypeUnsafeSymbol<InheritorT, TypeUnsafeT>,
     InheritorT : TypeSafeSymbol<TypeUnsafeT, InheritorT>
-> internal constructor(internal val untyped: TypeUnsafeT) : NameableSymbol<InheritorT>() {
-    final override fun unwrap() = untyped
+> internal constructor(internal val typeUnsafe: TypeUnsafeT) : NameableSymbol<InheritorT>() {
+    final override fun unwrap() = typeUnsafe
 
     final override fun match(data: ParserMetadata): Node<*>? {
-        return untyped.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+        return typeUnsafe.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
     }
 
-    final override fun resolveRawName() = untyped.rawName
+    final override fun resolveRawName() = typeUnsafe.rawName
 }
 
 /**
@@ -29,7 +29,7 @@ public abstract class TypeSafeJunction<InheritorT : TypeSafeJunction<InheritorT>
     untyped: TypeUnsafeJunction<InheritorT>
 ) : TypeSafeSymbol<TypeUnsafeJunction<InheritorT>, InheritorT>(untyped) {
     init {
-        untyped.typed = this
+        untyped.typeSafe = this
     }
 }
 
@@ -40,6 +40,6 @@ public abstract class TypeSafeSequence<InheritorT : TypeSafeSequence<InheritorT>
     untyped: TypeUnsafeSequence<InheritorT>
 ) : TypeSafeSymbol<TypeUnsafeSequence<InheritorT>, InheritorT>(untyped) {
     init {
-        untyped.typed = this
+        untyped.typeSafe = this
     }
 }

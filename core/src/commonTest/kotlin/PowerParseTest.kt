@@ -1,17 +1,17 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.typesafe.Sequence2
 import kotlin.test.Test
 
-private val textParser by parser {
+val strings by parser {
     val char by junction()
     val text by '\'' + multiple(char) + '\''
     val escape by '\'' + multiple(char) + '\''
+    val id by of("a-zA-Z") + anyOf("a-zA-Z0-9_")
 
-    char.actual = escape or of(!"\n'")
+    char.actual = escape or of(!"'\n")
 }
 
-private val switchParser by parser {
+val switches by parser {
     val escape by '/' + of("tnr/-//]")
     val char by escape or of(!"\n]")
     val boundedRange = char + '-' + char
@@ -23,8 +23,8 @@ private val switchParser by parser {
     val switch by maybe('~') + '[' + ranges + ']'
 }
 
-private val kombinator by parser {
-    val id by of("a-zA-Z") + anyOf("a-zA-Z0-9_")
+val ebnf by parser {
+    val id by strings.import<NameableSymbol<*>>()
     val symbol by junction()
     val rule by id + ':' + symbol + ';'
     val sequence by symbol + multiple(symbol)
@@ -33,8 +33,6 @@ private val kombinator by parser {
     val option by symbol + '?'
     val any by symbol + '*'
 
-    val text by textParser.import<Sequence2<*, *>>()
-
     symbol.actual = '(' + symbol + ')' or
             junction or
             sequence or
@@ -42,11 +40,11 @@ private val kombinator by parser {
             option or
             any or
             id or
-            text or
-            switchParser["switch"]
+            strings["text"] or
+            switches["switch"]
 
     start = multiple(rule)
-    skip = multipleOf("\u0000-\u0009\u000B-\u001F") or
+    skip = multipleOf("\u0000-\u0020") or
             text("/*") + anyOf("-") + text("*/") or
             text("//") + of("-\u0009\u000B-")
 }
@@ -54,6 +52,9 @@ private val kombinator by parser {
 class PowerParseTest {
     @Test
     fun parser() {
-        println(kombinator.parse("myRule : 'Hello, world!'"))
+        val strings = strings
+        val switches = switches
+        val ebnf = ebnf
+        println(ebnf.parse("myRule : 'Hello, world!';"))
     }
 }

@@ -26,7 +26,7 @@ public sealed class ParserDefinition {
      */
     public var start: Symbol by startDelegate
 
-    internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
+    internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()      // Not including imports, implicits
     internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
     internal val inversionSymbols = mutableSetOf<Inversion>()
 
@@ -67,7 +67,7 @@ public sealed class ParserDefinition {
      * @throws NoSuchElementException the symbol is undefined
      */
     public operator fun NamedParser.get(symbolName: String): Symbol {
-        return parserSymbols[symbolName]
+        return parserSymbols[symbolName]?.let { NamedSymbol(symbolName, it) }
             ?: throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
     }
 
@@ -174,8 +174,8 @@ public sealed class ParserDefinition {
             }
         }
         set(value) {
-            parserSymbols[name] = value
-            implicitSymbols[name] = value
+            unnamed = value.typeUnsafe.unsafeCast()
+            implicitSymbols[name] = unnamed
         }
 
     /**
@@ -288,7 +288,9 @@ public sealed interface NullaryParserDefinition {
      *
      * Whenever a match is made to this symbol, the listener is invoked.
      */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: NullarySymbolListener<MatchT>)
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: NullarySymbolListener<MatchT>
+    )
 
     /**
      * Assigns the supplied listener to the symbol.
@@ -651,11 +653,11 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
         if (root is TypeUnsafeJunction<*>) {
-            root.options += other
+            root.components += other
             return this
         }
         if (other is TypeUnsafeJunction<*>) {
-            other.options += root
+            other.components += root
             return option2
         }
         return SymbolFragment(TypeUnsafeJunction(root, other))
@@ -667,7 +669,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
         val other = option2.root
         if (other is TypeUnsafeJunction<*>) {
-            other.options += Text(this)
+            other.components += Text(this)
             return option2
         }
         return SymbolFragment(TypeUnsafeJunction(Text(this), other))
@@ -678,7 +680,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
         if (root is TypeUnsafeJunction<*>) {
-            root.options += Text(option2)
+            root.components += Text(option2)
             return this
         }
         return SymbolFragment(TypeUnsafeJunction(Text(option2), root))
@@ -692,11 +694,11 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
         if (root is TypeUnsafeSequence<*>) {
-            root.queries += other
+            root.components += other
             return this
         }
         if (other is TypeUnsafeSequence<*>) {
-            other.queries += root
+            other.components += root
             return query2
         }
         return SymbolFragment(TypeUnsafeSequence(root, other))
@@ -708,7 +710,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
         val other = query2.root
         if (other is TypeUnsafeSequence<*>) {
-            other.queries += Text(this)
+            other.components += Text(this)
             return query2
         }
         return SymbolFragment(TypeUnsafeSequence(Text(this), other))
@@ -719,7 +721,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
         if (root is TypeUnsafeSequence<*>) {
-            root.queries += Text(query2)
+            root.components += Text(query2)
             return this
         }
         return SymbolFragment(TypeUnsafeSequence(Text(query2), root))

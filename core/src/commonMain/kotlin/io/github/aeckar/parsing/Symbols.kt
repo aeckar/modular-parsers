@@ -10,19 +10,6 @@ private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)
  */
 private fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
 
-/**
- * Returns a string equal to this one with invisible characters expressed as their Kotlin escape character.
- */
-private fun String.withEscapes() = buildString {
-    this@withEscapes.forEach {
-        if (it.isWhitespace() || it.isISOControl()) {
-            append("\\u${it.code.toString(16).padStart(4, '0')}")
-        } else {
-            append(it)
-        }
-    }
-}
-
 // ------------------------------ generic symbols ------------------------------
 
 /**
@@ -48,18 +35,21 @@ public abstract class Symbol internal constructor() : ParserComponent {
         data: ParserMetadata,
         crossinline block: () -> MatchT
     ) = with(data) {
-        if (this@Symbol in failStack.last()) {
-            debugMatchFail { "Previous attempt failed" }
+        val symbol = this@Symbol
+        if (symbol in failStack.last()) {
+            symbol.debugMatchFail { "Previous attempt failed" }
             return@with null
         }
+        callStack += symbol // Not including symbol wrappers
         input.save()
         val result = block()
         if (result != null) {
-            debugMatchSuccess(result)
+            symbol.debugMatchSuccess(result)
         } else {
-            debugMatchFail()
-            failStack.last() += this@Symbol
+            symbol.debugMatchFail()
+            failStack.last() += symbol
         }
+        callStack.removeLast()
         result
     }
 
@@ -71,7 +61,11 @@ public abstract class Symbol internal constructor() : ParserComponent {
     internal fun align(data: ParserMetadata) {
         data.skip?.let {
             debug { "Attempting match to skip ${data.skip}" }
+            val previousSkip = data.skip
+            data.skip = null
             it.match(data)
+            data.skip = previousSkip
+            debug { "End skip" }
         }
         data.failStack += mutableListOf<Symbol>()
     }
@@ -117,8 +111,10 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 
     final override fun unwrap() = unnamed
 
-    final override fun match(data: ParserMetadata) : Node<*>? {
-        return unnamed.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+    override fun match(data: ParserMetadata) = matching(data) {
+        val result = unnamed.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+        data.input.removeSave()
+        result
     }
 }
 
@@ -129,6 +125,15 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
     base: NamedSymbol<out UnnamedT>,
 ) : NamedSymbol<UnnamedT>(base.name, base.unnamed) {
     internal abstract val origin: Parser
+
+    final override fun match(data: ParserMetadata) = matching(data) {
+        val previousSkip = data.skip
+        data.skip = (origin as? LexerlessParser)?.skip
+        val result = super.match(data)
+        data.skip = previousSkip
+        data.input.removeSave()
+        result
+    }
 }
 
 /**
@@ -163,7 +168,7 @@ public sealed class TypeUnsafeSymbol<
     TypeSafeT : TypeSafeSymbol<*, *>,
     InheritorT : TypeUnsafeSymbol<TypeSafeT, InheritorT>
 > : NameableSymbol<InheritorT>() {
-    protected val components: MutableList<Symbol> = mutableListOf()
+    internal val components: MutableList<Symbol> = mutableListOf()
 
     final override fun unwrap() = super.unwrap()
 
@@ -178,7 +183,13 @@ public sealed class TypeUnsafeSymbol<
  */
 public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<LexerSymbol>() {
     override fun unwrap() = start.root.unwrap()
-    override fun match(data: ParserMetadata) = start.lex(data)?.let { Node(this, it) }
+
+    override fun match(data: ParserMetadata) = matching(data) {
+        val result = start.lex(data)?.let { Node(this, it) }
+        data.input.removeSave()
+        result
+    }
+
     override fun resolveRawName() = start.rawName
 }
 
@@ -264,7 +275,6 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
                 debug { "End matches to query (matched substring is empty)" }
                 break
             }
-            debug { "Attempting match to skip ${data.skip}" }
             align(data)
             subMatch = query.match(data).unsafeCast()
         }
@@ -286,9 +296,11 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     private val emptyMatch = OptionNode(this, "", null)
 
-    override fun match(data: ParserMetadata): Node<*> {
+    override fun match(data: ParserMetadata): Node<*> { // Fail check & pivoting unnecessary
         debug { "Matching to query ${query.rawName} or empty match" }
+        data.callStack += this
         val result = query.match(data)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
+        data.callStack.removeLast()
         debugMatchSuccess(result)
         return result
     }
@@ -323,17 +335,16 @@ public class Inversion(
  */
 public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> internal constructor(
 ) : TypeUnsafeSymbol<TypeSafeT, TypeUnsafeJunction<TypeSafeT>>() {
-    internal lateinit var typed: TypeSafeJunction<*>
-    internal val options inline get() = components
+    internal lateinit var typeSafe: TypeSafeJunction<*>
 
     internal constructor(option1: Symbol, option2: Symbol) : this() {
-        options += option1
-        options += option2
+        components += option1
+        components += option2
     }
 
     override fun match(data: ParserMetadata) = matching(data) {
-        val result = options.asSequence()
-            .filter { it !in data.callStack /* prevent infinite recursion */ && it !in data.failStack.last() }
+        val result = components.asSequence()
+            .filter { it !in data.callStack /* prevent infinite recursion */ }
             .map {
                 debug { "Attempting match to query ${it.rawName}" }
                 it.match(data)
@@ -341,12 +352,12 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
             .withIndex()
             .find { it.value != null }
             ?.unsafeCast<IndexedValue<Node<*>>>()
-            ?.let { JunctionNode(typed, it.value.substring, it.value, it.index) }
+            ?.let { JunctionNode(typeSafe, it.value.substring, it.value, it.index) }
         data.input.removeSave()
         result
     }
 
-    override fun resolveRawName() = options.joinToString(" | ")
+    override fun resolveRawName() = components.joinToString(" | ")
 }
 
 /**
@@ -354,26 +365,25 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
  */
 public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> internal constructor(
 ) : TypeUnsafeSymbol<TypeSafeT, TypeUnsafeSequence<TypeSafeT>>() {
-    internal lateinit var typed: TypeSafeSequence<*>
-    internal val queries inline get() = components
+    internal lateinit var typeSafe: TypeSafeSequence<*>
 
     internal constructor(query1: Symbol, query2: Symbol) : this() {
-        queries += query1
-        queries += query2
+        components += query1
+        components += query2
     }
 
     override fun match(data: ParserMetadata) = matching(data) {
         val input = data.input
-        val firstQuery = queries.first()
+        val firstQuery = components.first()
         if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in data.callStack) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
-            debug { "Recursion found for non-junction query ${firstQuery.rawName}" }
+            debug { "Left-recursion found for non-junction query ${firstQuery.rawName}" }
             input.removeSave()
             return@matching null
         }
         var subMatch: Node<*>?
         val subMatches = mutableListOf<Node<*>>()
-        for (query in queries) {
+        for (query in components) {
             subMatch = query.match(data)
             if (subMatch == null) {
                 input.revert()
@@ -385,10 +395,10 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             }
         }
         input.removeSave()
-        SequenceNode(typed, subMatches.concatenate(), subMatches)
+        SequenceNode(typeSafe, subMatches.concatenate(), subMatches)
     }
 
-    override fun resolveRawName() = queries.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
+    override fun resolveRawName() = components.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
 
     public companion object {
         /**
@@ -396,8 +406,8 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
          */
         public val LINE: TypeUnsafeSequence<*> = TypeUnsafeSequence().apply {
             val ranges = listOf(Char.MIN_VALUE..'\u0009', '\u000b'..Char.MAX_VALUE)
-            queries += Repetition(Switch("-\u0009\u000b-", ranges))
-            queries += Text("\n")
+            components += Repetition(Switch("-\u0009\u000b-", ranges))
+            components += Text("\n")
         }
     }
 }

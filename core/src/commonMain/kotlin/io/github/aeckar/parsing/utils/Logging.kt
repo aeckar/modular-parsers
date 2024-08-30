@@ -3,7 +3,7 @@ package io.github.aeckar.parsing.utils
 import io.github.aeckar.parsing.Node
 import io.github.oshai.kotlinlogging.*
 
-internal val logger = object : KLogger {
+private val logger = object : KLogger {
     override val name: String
         get() = ""
 
@@ -20,7 +20,7 @@ internal val logger = object : KLogger {
 /**
  * Prepends this object to the debug message.
  */
-internal fun Any?.debug(lazyMessage: () -> String) = logger.debug { "$this: ${lazyMessage()}" }
+internal fun Any?.debug(lazyMessage: () -> String) = logger.debug { "${lazyMessage()} @ $this" }
 
 /**
  * Prepends this object to the debug message.
@@ -28,7 +28,7 @@ internal fun Any?.debug(lazyMessage: () -> String) = logger.debug { "$this: ${la
 internal fun Any?.debugMatchFail(lazyReason: () -> String = { "" }) {
     logger.debug {
         val reason = lazyReason().takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""
-        "$this: Match failed$reason"
+        "Match failed$reason @ $this"
     }
 }
 
@@ -36,5 +36,5 @@ internal fun Any?.debugMatchFail(lazyReason: () -> String = { "" }) {
  * Prepends this object to the debug message.
  */
 internal fun Any?.debugMatchSuccess(result: Node<*>) {
-    logger.debug { "$this: Match succeeded (substring = ${result.substring})"}
+    logger.debug { "Match succeeded (substring = ${result.substring.withEscapes()}) @ $this"}
 }

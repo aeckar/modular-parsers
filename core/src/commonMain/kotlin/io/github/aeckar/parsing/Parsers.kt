@@ -108,6 +108,17 @@ internal val Parser.listeners get() = when (this) {
 }
 
 /**
+ * A parser that creates an abstract syntax tree directly from its input.
+ */
+public sealed interface LexerlessParser : Parser
+
+internal val LexerlessParser.skip get() = when (this) {
+    is NameableLexerlessParser -> skip
+    is NamedNullaryLexerlessParser -> unnamed.skip
+    is NamedUnaryLexerlessParser<*> -> unnamed.skip
+}
+
+/**
  * A named parser.
  */
 public sealed interface NamedParser : Named, Parser
@@ -183,15 +194,15 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: Argume
 // ------------------------------ lexerless parsers ------------------------------
 
 /**
- * A parser that creates an abstract syntax tree directly from its input.
+ * A nameable lexerless parser.
  */
-public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Parser {
+public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Nameable, LexerlessParser {
     internal val parserSymbols = def.resolveSymbols()
     internal val listeners = def.listeners
     internal val id = hashCode()
+    internal val skip = def.skipDelegate.field
 
     private val start = def.startDelegate.field
-    private val skip = def.skipDelegate.field
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
@@ -212,11 +223,11 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Pa
 }
 
 /**
- * A named parser that takes no arguments.
+ * A lexerless parser that takes no arguments.
  */
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
-) : NameableLexerlessParser(def), Nameable, NullaryParser {
+) : NameableLexerlessParser(def), NullaryParser {
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
@@ -226,26 +237,25 @@ public class NullaryLexerlessParser internal constructor(
 }
 
 /**
- * A named [NameableLexerlessParser] that does not take an argument.
+ * A named lexerless parser that does not take an argument.
  */
 public class NamedNullaryLexerlessParser internal constructor(
     override val name: String,
     internal val unnamed: NullaryLexerlessParser
-) : NamedNullaryParser, NullaryParser by unnamed {
+) : NamedNullaryParser, NullaryParser by unnamed, LexerlessParser {
     init {
-        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
 }
 
 /**
- * A parser that takes an argument,
- * and whose symbols are resolved after their initial definition.
+ * A lexerless parser that takes an argument.
  */
 public class UnaryLexerlessParser<ArgumentT> internal constructor(
     def: UnaryLexerlessParserDefinition<ArgumentT>
-) : NameableLexerlessParser(def), Nameable, UnaryParser<ArgumentT> {
+) : NameableLexerlessParser(def), UnaryParser<ArgumentT> {
     internal val initializer = def.initializer
 
     override fun provideDelegate(
@@ -257,14 +267,14 @@ public class UnaryLexerlessParser<ArgumentT> internal constructor(
 }
 
 /**
- * A named [NameableLexerlessParser] that takes one argument.
+ * A named lexerless parser that takes one argument.
  */
 public class NamedUnaryLexerlessParser<ArgumentT> internal constructor(
     override val name: String,
     internal val unnamed: UnaryLexerlessParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed {
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, LexerlessParser {
     init {
-        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
@@ -290,7 +300,7 @@ public sealed interface Lexer {
 /**
  * A parser that tokenizes its input before parsing.
  */
-public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Parser {
+public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, Lexer, Parser {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
 
     internal val parserSymbols = def.resolveSymbols()
@@ -362,7 +372,7 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Lexer, Par
  */
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
-) : NameableLexerParser(def), Nameable, NullaryParser, Lexer {
+) : NameableLexerParser(def), NullaryParser, Lexer {
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
@@ -379,7 +389,7 @@ public class NamedNullaryLexerParser internal constructor(
     internal val unnamed: NullaryLexerParser
 ) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed {
     init {
-        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
@@ -390,7 +400,7 @@ public class NamedNullaryLexerParser internal constructor(
  */
 public class UnaryLexerParser<ArgumentT> internal constructor(
     def: UnaryLexerParserDefinition<ArgumentT>
-) : NameableLexerParser(def), Nameable, UnaryParser<ArgumentT>, Lexer {
+) : NameableLexerParser(def), UnaryParser<ArgumentT>, Lexer {
     internal val initializer = def.base.initializer
 
     override fun provideDelegate(
@@ -409,7 +419,7 @@ public class NamedUnaryLexerParser<ArgumentT> internal constructor(
     internal val unnamed: UnaryLexerParser<ArgumentT>
 ) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed {
     init {
-        debug { "Named at ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
