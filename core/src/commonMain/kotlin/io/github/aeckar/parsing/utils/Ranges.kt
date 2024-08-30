@@ -1,7 +1,12 @@
 package io.github.aeckar.parsing.utils
 
 import io.github.aeckar.parsing.MalformedParserException
+import io.github.aeckar.parsing.Switch
 
+/**
+ * Returns a list of character ranges that can used by [Switch] symbols.
+ * @see rangesToString
+ */
 internal fun String.toRanges(): MutableList<CharRange> {
     fun CharIterator.nextCharOrEscape(): Char {
         try {
@@ -48,23 +53,39 @@ internal fun String.toRanges(): MutableList<CharRange> {
     return ranges
 }
 
-internal fun List<CharRange>.invertRanges(): List<CharRange> {
-    val inverted = ArrayList<CharRange>(size)
-    for (range in this) {
+/**
+ * Inverts the ranges and merges intersecting bounds in this list, in place.
+ * @return this list
+ */
+internal fun MutableList<CharRange>.invertRanges(): List<CharRange> {
+    val unoptimized = ArrayList<CharRange>(size)
+    sortBy { it.first }
+    for (range in this) {   // 1. Invert each range
         if (range.first == Char.MIN_VALUE) {
             if (range.last == Char.MAX_VALUE) {
                 throw MalformedParserException("Cannot invert all-inclusive switch range '\\u0000-\\uFFFF'")
             }
             // fall-through
         } else {
-            inverted += Char.MIN_VALUE..<range.first
+            unoptimized += Char.MIN_VALUE..<range.first
             if (range.last == Char.MAX_VALUE) {
                 continue
             }
         }
-        inverted += (range.last + 1)..Char.MAX_VALUE
+        unoptimized += (range.last + 1)..Char.MAX_VALUE
     }
-    return inverted
+    clear()
+    // First lower bound is always Char.MIN_VALUE
+    // Last upper bound is always Char.MAX_VALUE
+    val ranges = unoptimized.pivotIterator()
+    for (range in ranges) {   // 2. Ensure inverted bounds do not overlap
+        if (ranges.hasNext() && range.last > ranges.peek().first) {
+            add(range.first..ranges.next().last)    // Consume next range
+        } else {
+            add(range)
+        }
+    }
+    return this
 }
 
 internal fun List<CharRange>.rangesToString() = joinToString("") {

@@ -66,9 +66,17 @@ public sealed class ParserDefinition {
      * Imports the symbol with the given name from this parser for a single use.
      * @throws NoSuchElementException the symbol is undefined
      */
-    public operator fun NamedParser.get(symbolName: String): Symbol {
-        return parserSymbols[symbolName]?.let { NamedSymbol(symbolName, it) }
-            ?: throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
+    public operator fun NamedNullaryParser.get(symbolName: String): Symbol {
+        return parserSymbols[symbolName]?.let { NullaryForeignSymbol(NamedSymbol(symbolName, it), this) }
+            ?: raiseUndefinedImport(symbolName)
+    }
+
+    /**
+     * See [get] for details.
+     */
+    public operator fun NamedUnaryParser<*>.get(symbolName: String): Symbol {
+        return parserSymbols[symbolName]?.let { UnaryForeignSymbol(NamedSymbol(symbolName, it), this) }
+            ?: raiseUndefinedImport(symbolName)
     }
 
     /**
@@ -149,6 +157,10 @@ public sealed class ParserDefinition {
             return UnaryForeignSymbol<UnnamedT, ArgumentT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
                 .readOnlyProperty()
         }
+    }
+
+    private fun NamedParser.raiseUndefinedImport(symbolName: String): Nothing {
+        throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
     }
 
     // ------------------------------ symbol inversions & implicit symbols ------------------------------
