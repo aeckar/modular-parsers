@@ -18,7 +18,7 @@ public fun interface NullarySymbolListener<MatchT : Symbol> : SymbolListener {
 /**
  * A listener that takes an argument and includes the argument passed to the parser.
  */
-public fun interface UnarySymbolListener<MatchT : Symbol, ArgumentT> : SymbolListener {
+public fun interface UnarySymbolListener<MatchT : Symbol, in ArgumentT> : SymbolListener {
     /**
      * Invokes the lambda that defines the listener of a specific named symbol.
      *

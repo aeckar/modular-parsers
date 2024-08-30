@@ -40,7 +40,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
             symbol.debugMatchFail { "Previous attempt failed" }
             return@with null
         }
-        callStack += symbol // Not including symbol wrappers
+        callStack += symbol // Including symbol wrappers
         input.save()
         val result = block()
         if (result != null) {
@@ -78,7 +78,10 @@ public abstract class Symbol internal constructor() : ParserComponent {
     internal open fun unwrap() = this
 
     internal abstract fun match(data: ParserMetadata): Node<*>?
-    
+
+    /**
+     * Returns the name assigned to this symbol if it exists, else its EBNF representation.
+     */
     final override fun toString(): String = rawName
 }
 
@@ -128,7 +131,7 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
 
     final override fun match(data: ParserMetadata) = matching(data) {
         val previousSkip = data.skip
-        data.skip = (origin as? LexerlessParser)?.skip
+        data.skip = (origin as? LexerlessParser)?.resolveSkip()
         val result = super.match(data)
         data.skip = previousSkip
         data.input.removeSave()
@@ -147,7 +150,7 @@ public class NullaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>> intern
 /**
  * A foreign symbol originating from a [UnaryParser].
  */
-public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, ArgumentT> internal constructor(
+public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, in ArgumentT> internal constructor(
     base: NamedSymbol<out UnnamedT>,
     override val origin: UnaryParser<ArgumentT>
 ) : ForeignSymbol<UnnamedT>(base)
@@ -319,7 +322,7 @@ public class Inversion(
     internal var origin: Parser by OnceAssignable(throws = ::IllegalStateException)
 
     override fun match(data: ParserMetadata) = matching(data) {
-        origin.parserSymbols.values.asSequence()
+        origin.resolveSymbols().values.asSequence()
             .mapNotNull {
                 debug { "Attempting match to query ${it.rawName}" }
                 it.match(data)
@@ -389,7 +392,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
                 input.revert()
                 return@matching null
             }
-            subMatches += subMatch
+            subMatches.add(subMatch)
             if (subMatch.substring.isNotEmpty()) {
                 align(data)
             }

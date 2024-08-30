@@ -10,7 +10,7 @@ import kotlin.reflect.KProperty
 // ------------------------------------ abstract parser definitions ------------------------------------
 
 /**
- * Defines a scope where [Parser] rules and listeners can be defined.
+ * Defines a scope where [Parser] rules and symbolListeners can be defined.
  *
  * Each listener is invoked from a completed [abstract syntax tree][Parser.parse] in a top-down, left-to-right fashion.
  */
@@ -27,16 +27,32 @@ public sealed class ParserDefinition {
     public var start: Symbol by startDelegate
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()      // Not including imports, implicits
-    internal val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
     internal val inversionSymbols = mutableSetOf<Inversion>()
+
+    private val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
 
     /**
      * @throws MalformedParserException the assertion fails
      */
     protected fun ensureUndefinedListener(name: String) {
-        if (name in listeners) {
+        if (name in resolveListeners()) {
             throw MalformedParserException("Listener for symbol '$name' defined more than once")
         }
+    }
+
+    internal fun compileSymbols(): Map<String, NameableSymbol<*>> {
+        val allSymbols = HashMap<String, NameableSymbol<*>>(parserSymbols.size + implicitSymbols.size)
+        implicitSymbols.forEach { (name, symbol) ->
+            symbol ?: throw MalformedParserException("Implicit symbol '$name' is undefined")
+            allSymbols[name] = symbol
+        }
+        allSymbols += parserSymbols
+        return allSymbols
+    }
+
+    internal fun resolveListeners() = when (this) {
+        is NullaryParserDefinition -> (this as NullaryParserDefinition).resolveListeners()
+        is UnaryParserDefinition<*> -> (this as UnaryParserDefinition<*>).resolveListeners()
     }
 
     // ------------------------------ symbol definition & import/export ------------------------------
@@ -67,7 +83,7 @@ public sealed class ParserDefinition {
      * @throws NoSuchElementException the symbol is undefined
      */
     public operator fun NamedNullaryParser.get(symbolName: String): Symbol {
-        return parserSymbols[symbolName]?.let { NullaryForeignSymbol(NamedSymbol(symbolName, it), this) }
+        return resolveSymbols()[symbolName]?.let { NullaryForeignSymbol(NamedSymbol(symbolName, it), this) }
             ?: raiseUndefinedImport(symbolName)
     }
 
@@ -75,7 +91,7 @@ public sealed class ParserDefinition {
      * See [get] for details.
      */
     public operator fun NamedUnaryParser<*>.get(symbolName: String): Symbol {
-        return parserSymbols[symbolName]?.let { UnaryForeignSymbol(NamedSymbol(symbolName, it), this) }
+        return resolveSymbols()[symbolName]?.let { UnaryForeignSymbol(NamedSymbol(symbolName, it), this) }
             ?: raiseUndefinedImport(symbolName)
     }
 
@@ -109,7 +125,7 @@ public sealed class ParserDefinition {
 
         protected fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                origin.parserSymbols.getValue(name)
+                origin.resolveSymbols().getValue(name)
             } catch (e: NoSuchElementException) {
                 throw MalformedParserException("Symbol '$name' is not defined in parser '$origin'", e)
             }
@@ -124,7 +140,7 @@ public sealed class ParserDefinition {
      */
     internal fun Parser.ensureExtensionCandidate(name: String) {
         ensureUndefinedListener(name)
-        if (name !in listeners) {
+        if (name !in resolveListeners()) {
             throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
         }
     }
@@ -193,14 +209,14 @@ public sealed class ParserDefinition {
     /**
      * Returns a junction that can be defined after being delegated to a property.
      *
-     * Because the types of the options are erased, they cannot be accessed within listeners.
+     * Because the types of the options are erased, they cannot be accessed within symbolListeners.
      */
     public fun junction(): TypeUnsafeJunction<*> = TypeUnsafeJunction()
 
     /**
      * Returns a sequence that can be defined after being delegated to a property.
      *
-     * Because the types of the queries are erased, they cannot be accessed within listeners.
+     * Because the types of the queries are erased, they cannot be accessed within symbolListeners.
      */
     public fun sequence(): TypeUnsafeSequence<*> = TypeUnsafeSequence()
 
@@ -284,13 +300,6 @@ public sealed class ParserDefinition {
     users can simply use a character switch instead.
  */
 
-internal val ParserDefinition.listeners get() = when (this) {
-    is NullaryLexerlessParserDefinition -> listeners
-    is UnaryLexerlessParserDefinition<*> -> listeners
-    is NullaryLexerParserDefinition -> base.listeners
-    is UnaryLexerParserDefinition<*> -> base.listeners
-}
-
 /**
  * A [definition][ParserDefinition] of a parser without an argument.
  */
@@ -313,6 +322,12 @@ public sealed interface NullaryParserDefinition {
     public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: NullarySymbolListener<MatchT>
     )
+}
+
+
+internal fun NullaryParserDefinition.resolveListeners(): Map<String, NullarySymbolListener<*>> = when (this) {
+    is NullaryLexerlessParserDefinition -> symbolListeners
+    is NullaryLexerParserDefinition -> base.symbolListeners
 }
 
 /**
@@ -341,7 +356,8 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
     /**
      * See [extendsListener] for details.
      */
-    public infix fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
+    public infix fun <MatchT : NameableSymbol<MatchT>>
+    UnaryForeignSymbol<MatchT, ArgumentT>.extendsListener(
         action: UnarySymbolListener<MatchT, ArgumentT>
     )
 
@@ -350,6 +366,13 @@ public sealed interface UnaryParserDefinition<ArgumentT> {
      */
     public fun init(initializer: (ArgumentT) -> Unit)
 }
+
+internal fun <ArgumentT>
+        UnaryParserDefinition<ArgumentT>.resolveListeners(): Map<String, UnarySymbolListener<Symbol, ArgumentT>> =
+    when (this) {
+        is UnaryLexerlessParserDefinition<*> -> symbolListeners.unsafeCast()
+        is UnaryLexerParserDefinition<*> -> base.symbolListeners.unsafeCast()
+    }
 
 // ------------------------------------ lexerless parser definitions ------------------------------------
 
@@ -460,7 +483,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
  */
 public class NullaryLexerlessParserDefinition internal constructor(
 ) : LexerlessParserDefinition(), NullaryParserDefinition {
-    internal val listeners = mutableMapOf<String, NullarySymbolListener<*>>()
+    internal val symbolListeners = mutableMapOf<String, NullarySymbolListener<*>>()
 
     /**
      * Assigns an action to be performed whenever a successful match is made using this symbol.
@@ -469,15 +492,15 @@ public class NullaryLexerlessParserDefinition internal constructor(
         action: NullarySymbolListener<MatchT>
     ) {
         ensureUndefinedListener(name)
-        listeners[name] = action
+        symbolListeners[name] = action
     }
 
     override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: NullarySymbolListener<MatchT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = NullarySymbolListener {
-            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
+        symbolListeners[name] = NullarySymbolListener {
+            with(origin.resolveListeners().getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
                 this@NullarySymbolListener()
             }
             with(action) { this@NullarySymbolListener() }
@@ -490,7 +513,7 @@ public class NullaryLexerlessParserDefinition internal constructor(
  */
 public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
 ) : LexerlessParserDefinition(), UnaryParserDefinition<ArgumentT> {
-    internal val listeners = mutableMapOf<String, UnarySymbolListener<*, ArgumentT>>()
+    internal val symbolListeners = mutableMapOf<String, UnarySymbolListener<*, ArgumentT>>()
 
     internal var initializer: ((ArgumentT) -> Unit)? = null
 
@@ -501,27 +524,28 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
         action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         ensureUndefinedListener(name)
-        listeners[name] = action
+        symbolListeners[name] = action
     }
 
     override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
         action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = UnarySymbolListener {
-            with(origin.listeners.getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
+        symbolListeners[name] = UnarySymbolListener {
+            with(origin.resolveListeners().getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
                 this@UnarySymbolListener()
             }
             with(action) { this@UnarySymbolListener(it) }
         }
     }
 
-    override fun <MatchT : NameableSymbol<MatchT>> UnaryForeignSymbol<MatchT, in ArgumentT>.extendsListener(
+    override fun <MatchT : NameableSymbol<MatchT>>
+    UnaryForeignSymbol<MatchT, ArgumentT>.extendsListener(
         action: UnarySymbolListener<MatchT, ArgumentT>
     ) {
         origin.ensureExtensionCandidate(name)
-        listeners[name] = UnarySymbolListener {
-            with(origin.listeners.getValue(name).unsafeCast<UnarySymbolListener<MatchT, in ArgumentT>>()) {
+        symbolListeners[name] = UnarySymbolListener {
+            with(origin.resolveListeners().getValue(name).unsafeCast<UnarySymbolListener<MatchT, ArgumentT>>()) {
                 this@UnarySymbolListener(it)
             }
             with(action) { this@UnarySymbolListener(it) }
@@ -743,13 +767,17 @@ public sealed class LexerParserDefinition : ParserDefinition() {
 /**
  * Defines a scope where a [NameableLexerParser] that does not take an argument can be defined.
  */
-public class NullaryLexerParserDefinition internal constructor(  // Argument never explicitly given
-    internal val base: NullaryLexerlessParserDefinition = NullaryLexerlessParserDefinition()
-) : LexerParserDefinition(), NullaryParserDefinition by base
+public class NullaryLexerParserDefinition private constructor(
+    internal val base: NullaryLexerlessParserDefinition
+) : LexerParserDefinition(), NullaryParserDefinition by base {
+    internal constructor() : this(NullaryLexerlessParserDefinition())
+}
 
 /**
  * Defines a scope where a [NameableLexerParser] that takes one argument can be defined.
  */
-public class UnaryLexerParserDefinition<ArgumentT> internal constructor( // Argument never explicitly given
-    internal val base: UnaryLexerlessParserDefinition<ArgumentT> = UnaryLexerlessParserDefinition()
-) : LexerParserDefinition(), UnaryParserDefinition<ArgumentT> by base
+public class UnaryLexerParserDefinition<in ArgumentT> private constructor(
+    internal val base: UnaryLexerlessParserDefinition<@UnsafeVariance ArgumentT>
+) : LexerParserDefinition(), UnaryParserDefinition<@UnsafeVariance ArgumentT> by base {
+    internal constructor() : this(UnaryLexerlessParserDefinition())
+}

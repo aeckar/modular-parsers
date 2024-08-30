@@ -1,31 +1,67 @@
 package io.github.aeckar.parsing.utils
 
+private const val INITIAL_SIZE = 10
+
 /**
- * A barebones implementation of a first-in-first-out integer stack.
+ * A first-in-first-out stack of unboxed integers.
  */
-internal class IntStack {
-    private var size: Int = 10
-    private var data: IntArray = IntArray(size)
+public class IntStack : Iterable<Int> {
+    /**
+     * The number of elements in this stack.
+     */
+    public var size: Int = 0
+        private set
 
-    fun last() = data[size - 1]
+    @PublishedApi
+    internal var buffer: IntArray = IntArray(INITIAL_SIZE)
+        private set
 
-    fun incrementLast() {
-        ++data[size]
+    /**
+     * Returns the top of the stack.
+     */
+    public fun last(): Int {
+        ensureNotEmpty()
+        return buffer[size - 1]
     }
 
-    fun removeLast(): Int = last().also { --size }
+    /**
+     * Modifies the top of the stack according to [action].
+     */
+    public inline fun mapLast(action: (Int) -> Int) {
+        ensureNotEmpty()
+        buffer[size - 1] = action(buffer[size - 1])
+    }
 
-    operator fun get(index: Int): Int = data[index]
+    /**
+     * Pops the top element from the stack and returns its value.
+     */
+    public fun removeLast(): Int = last().also { --size }
 
-    operator fun plusAssign(n: Int) {
-        if (size == data.size) {
+    /**
+     * Pushes [n] to the top of the stack.
+     */
+    public operator fun plusAssign(n: Int) {
+        if (size == buffer.size) {
             val new = IntArray(size * 2)
-            data.copyInto(new)
-            data = new
+            buffer.copyInto(new)
+            buffer = new
         }
-        data[size] = n
-        ++size
+        buffer[size++] = n
     }
 
-    override fun toString(): String = data.toString()
+    @PublishedApi
+    internal fun ensureNotEmpty() {
+        if (size == 0) {
+            throw NoSuchElementException("Stack is empty")
+        }
+    }
+
+    override fun iterator(): IntIterator = object : IntIterator() {
+        private var position = 0
+
+        override fun hasNext() = position < size
+        override fun nextInt() = buffer[position++]
+    }
+
+    override fun toString(): String = buffer.take(size).toString()
 }

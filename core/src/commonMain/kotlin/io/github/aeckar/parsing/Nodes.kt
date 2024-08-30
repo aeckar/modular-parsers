@@ -2,6 +2,7 @@ package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.JunctionNode
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
+import io.github.aeckar.parsing.utils.IntStack
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -24,9 +25,9 @@ public open class Node<MatchT : Symbol> internal constructor(
      * The substring matched by the symbol that produced this node.
      */
     public val substring: String
-) {
+) : Iterable<Node<*>> {
     /**
-     * The children of this node as the root of an abstract syntax tree.
+     * The children of this node, each as the root of an abstract syntax tree.
      */
     public open val children: List<Node<*>> = persistentListOf()    // Empty for leaf nodes
 
@@ -36,7 +37,47 @@ public open class Node<MatchT : Symbol> internal constructor(
     public fun isNamed(): Boolean = source is NameableSymbol<*>
 
     /**
-     * Returns the name assigned to this symbol if it exists, else its EBNF representation.
+     * Returns an iterator over the abstract syntax tree whose root is this node in a bottom-up, left-to-right fashion.
+     *
+     * The first node returned is the bottom-left-most and the last node returned is this one.
+     */
+    final override fun iterator(): Iterator<Node<*>> = object : Iterator<Node<*>> {
+        private var cursor: Node<*> = this@Node
+        private val parentStack = mutableListOf<Node<*>>()
+        private val childIndices = IntStack()
+        private var firstIteration = true
+
+        init {
+            childIndices += 0   // Prevent underflow in loop condition
+            while (cursor.children.isNotEmpty()) {  // Move to bottom-left node
+                parentStack.add(cursor)
+                cursor = cursor.children.first()
+                childIndices += 0
+            }
+        }
+
+        override fun hasNext() = cursor !== this@Node
+
+        override fun next(): Node<*> {
+            if (firstIteration) {
+                firstIteration = false
+                return cursor
+            }
+            cursor = parentStack.removeLast()
+            childIndices.removeLast()
+            while (childIndices.last() <= cursor.children.lastIndex) {
+                parentStack.add(cursor)
+                cursor = cursor.children[childIndices.last()]
+                childIndices.mapLast(Int::inc)
+                childIndices += 0
+            }
+            return cursor
+        }
+    }
+
+    /**
+     * Returns the name assigned to the symbol that produced this node if it exists,
+     * else the symbol's EBNF representation.
      */
     final override fun toString(): String = source.rawName
 }

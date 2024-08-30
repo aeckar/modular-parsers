@@ -55,6 +55,6 @@ class PowerParseTest {
         val strings = strings
         val switches = switches
         val ebnf = ebnf
-        println(ebnf.parse("myRule : 'Hello, world!';"))
+        println(ebnf("myRule : 'Hello, world!';"))
     }
 }

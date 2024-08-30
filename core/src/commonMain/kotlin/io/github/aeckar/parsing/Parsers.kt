@@ -1,5 +1,3 @@
-@file:Suppress("LeakingThis")   // Parser ID hashcode
-
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.utils.*
@@ -9,60 +7,7 @@ import kotlinx.io.RawSource
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
-private fun Node<*>.walk(listenerStrategy: (Node<*>) -> Unit): Node<*> {
-    // Iterative to save memory
-    fun walk(root: Node<*>) {
-        var cursor = root
-        val parents = mutableListOf<Node<*>>()
-        val children = IntStack().apply { this += 0 }
-        while (cursor.children.isNotEmpty()) {  // Move to bottom-left node
-            parents += cursor
-            cursor = cursor.children.first()
-        }
-        listenerStrategy(cursor)
-        cursor = parents.removeLast()
-        while (cursor !== root) {
-            if (cursor.children.isNotEmpty() && children.last() <= cursor.children.lastIndex) {
-                children.incrementLast()
-                parents += cursor
-                cursor = cursor.children[children.last()]
-                children += 0
-            } else {
-                listenerStrategy(cursor)
-                cursor = parents.removeLast()
-            }
-        }
-    }
-
-    if (children.isNotEmpty()) {
-        walk(this)
-    }
-    listenerStrategy(this)
-    return this
-}
-
-/**
- * Returns the start symbol.
- */
-private fun ParserDefinition.resolveSymbols(): Map<String, NameableSymbol<*>> {
-    val allSymbols = HashMap<String, NameableSymbol<*>>(parserSymbols.size + implicitSymbols.size)
-    implicitSymbols.forEach { (name, symbol) ->
-        symbol ?: throw MalformedParserException("Implicit symbol '$name' is undefined")
-        allSymbols[name] = symbol
-    }
-    allSymbols += parserSymbols
-    return allSymbols
-}
-
-/**
- * @throws MalformedParserException always
- */
-private fun Parser.raiseUndefinedStart(): Nothing {
-    val name = if (this is Named) name  else ""
-    throw MalformedParserException("Start symbol for parser '$name' is undefined")
-}
-
-// ------------------------------ basic parsers ------------------------------
+// ------------------------------ generic parsers ------------------------------
 
 /**
  * Performs actions according to a formal grammar.
@@ -77,19 +22,22 @@ public sealed interface Parser {
     public val symbols: Map<String, NameableSymbol<*>>
 
     /**
+     * An immutable map of all listeners defined in this parser.
+     */
+    public val listeners: Map<String, SymbolListener>
+
+    /**
      * Returns the root node of the abstract syntax tree representing the input, if one exists.
      */
     public fun parse(input: String): Node<*>?
 
     /**
-     * Returns the root node of the abstract syntax tree representing the input, if one exists.
+     * See [parse] for details.
      */
     public fun parse(input: RawSource): Node<*>?
 }
 
-// The following extensions used by ParserDefinition
-
-internal val Parser.parserSymbols: Map<String, NameableSymbol<*>> get() = when (this) {
+internal fun Parser.resolveSymbols(): Map<String, NameableSymbol<*>> = when (this) {
     is NameableLexerlessParser -> parserSymbols
     is NameableLexerParser -> parserSymbols
     is NamedNullaryLexerlessParser -> unnamed.parserSymbols
@@ -98,24 +46,21 @@ internal val Parser.parserSymbols: Map<String, NameableSymbol<*>> get() = when (
     is NamedUnaryLexerParser<*> -> unnamed.parserSymbols
 }
 
-internal val Parser.listeners get() = when (this) {
-    is NameableLexerlessParser -> listeners
-    is NameableLexerParser -> listeners
-    is NamedNullaryLexerlessParser -> unnamed.listeners
-    is NamedUnaryLexerlessParser<*> -> unnamed.listeners
-    is NamedNullaryLexerParser -> unnamed.listeners
-    is NamedUnaryLexerParser<*> -> unnamed.listeners
+internal fun Parser.resolveListeners() = when (this) {
+    is NameableLexerlessParser -> symbolListeners
+    is NameableLexerParser -> symbolListeners
+    is NamedNullaryLexerlessParser -> unnamed.symbolListeners
+    is NamedUnaryLexerlessParser<*> -> unnamed.symbolListeners
+    is NamedNullaryLexerParser -> unnamed.symbolListeners
+    is NamedUnaryLexerParser<*> -> unnamed.symbolListeners
 }
 
 /**
- * A parser that creates an abstract syntax tree directly from its input.
+ * @throws MalformedParserException always
  */
-public sealed interface LexerlessParser : Parser
-
-internal val LexerlessParser.skip get() = when (this) {
-    is NameableLexerlessParser -> skip
-    is NamedNullaryLexerlessParser -> unnamed.skip
-    is NamedUnaryLexerlessParser<*> -> unnamed.skip
+private fun Parser.raiseUndefinedStart(): Nothing {
+    val name = if (this is Named) name  else ""
+    throw MalformedParserException("Start symbol for parser '$name' is undefined")
 }
 
 /**
@@ -123,15 +68,14 @@ internal val LexerlessParser.skip get() = when (this) {
  */
 public sealed interface NamedParser : Named, Parser
 
+// ------------------------------ nullary parsers ------------------------------
+
 /**
  * A parser that does not take an argument.
  */
-public sealed interface NullaryParser : Parser
-
-/**
- * A named nullary parser.
- */
-public sealed interface NamedNullaryParser : NamedParser, NullaryParser
+public sealed interface NullaryParser : Parser {
+    abstract override val listeners: Map<String, NullarySymbolListener<*>>
+}
 
 /**
  * Invokes the listeners of this parser on the nodes of a
@@ -139,28 +83,40 @@ public sealed interface NamedNullaryParser : NamedParser, NullaryParser
  *
  * @return the root node of the resulting AST
  */
-public operator fun NullaryParser.invoke(input: String): Node<*>? = parse(input)?.walk(::listenerStrategy)
+public operator fun NullaryParser.invoke(input: String): Node<*>? {
+    val ast = parse(input)
+    ast?.forEach(::invokeListener)
+    return ast
+}
 
 /**
  * See [NullaryParser.invoke] for details.
  */
-public operator fun NullaryParser.invoke(input: RawSource): Node<*>? = parse(input)?.walk(::listenerStrategy)
+public operator fun NullaryParser.invoke(input: RawSource): Node<*>? {
+    val ast = parse(input)
+    ast?.forEach(::invokeListener)
+    return ast
+}
 
-private fun NullaryParser.listenerStrategy(node: Node<*>) {
+private fun NullaryParser.invokeListener(node: Node<*>) {
     listeners[toString()]
         ?.unsafeCast<NullarySymbolListener<Symbol>>()
         ?.apply { node.unsafeCast<Node<Symbol>>()() }
 }
 
 /**
- * A parser that takes one argument.
+ * A named nullary parser.
  */
-public sealed interface UnaryParser<ArgumentT> : Parser
+public sealed interface NamedNullaryParser : NamedParser, NullaryParser
+
+// ------------------------------ unary parsers ------------------------------
 
 /**
- * A named unary parser.
+ * A parser that takes one argument.
  */
-public sealed interface NamedUnaryParser<ArgumentT> : NamedParser, UnaryParser<ArgumentT>
+public sealed interface UnaryParser<in ArgumentT> : Parser {
+    abstract override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>>
+}
 
 /**
  * Invokes the listeners of this parser on the nodes of a
@@ -170,37 +126,61 @@ public sealed interface NamedUnaryParser<ArgumentT> : NamedParser, UnaryParser<A
  * @return the root node of the resulting AST
  */
 public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): Node<*>? {
-    initializer?.let { it(argument) }
-    return parse(input)?.walk { listenerStrategy(argument, it) }
+    resolveInitializer()?.let { it(argument) }
+    val ast = parse(input)
+    ast?.forEach { invokeListener(argument, it) }
+    return ast
 }
 
 /**
  * See [UnaryParser.invoke] for details.
  */
 public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): Node<*>? {
-    initializer?.let { it(argument) }
-    return parse(input)?.walk { listenerStrategy(argument, it) }
+    resolveInitializer()?.let { it(argument) }
+    val ast = parse(input)
+    ast?.forEach { invokeListener(argument, it) }
+    return ast
 }
 
-private val <ArgumentT> UnaryParser<ArgumentT>.initializer get() =
-    if (this is UnaryLexerlessParser<ArgumentT>) initializer else (this as UnaryLexerParser<ArgumentT>).initializer
+private fun <ArgumentT> UnaryParser<ArgumentT>.resolveInitializer() = when (this) {
+    is UnaryLexerlessParser<ArgumentT> -> initializer
+    is UnaryLexerParser<ArgumentT> -> initializer
+    is NamedUnaryLexerParser -> unnamed.initializer
+    is NamedUnaryLexerlessParser -> unnamed.initializer
+}
 
-private fun <ArgumentT> UnaryParser<ArgumentT>.listenerStrategy(argument: ArgumentT, node: Node<*>) {
-    listeners[toString()]
+private fun <ArgumentT> UnaryParser<ArgumentT>.invokeListener(argument: ArgumentT, node: Node<*>) {
+    resolveListeners()[toString()]
         ?.unsafeCast<UnarySymbolListener<Symbol, ArgumentT>>()
         ?.apply { node.unsafeCast<Node<Symbol>>()(argument) }
 }
 
+/**
+ * A named unary parser.
+ */
+public sealed interface NamedUnaryParser<in ArgumentT> : NamedParser, UnaryParser<ArgumentT>
+
 // ------------------------------ lexerless parsers ------------------------------
+
+/**
+ * A parser that creates an abstract syntax tree directly from its input.
+ */
+public sealed interface LexerlessParser : Parser
+
+internal fun LexerlessParser.resolveSkip() = when (this) {
+    is NameableLexerlessParser -> skip
+    is NamedNullaryLexerlessParser -> unnamed.skip
+    is NamedUnaryLexerlessParser<*> -> unnamed.skip
+}
 
 /**
  * A nameable lexerless parser.
  */
 public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Nameable, LexerlessParser {
-    internal val parserSymbols = def.resolveSymbols()
-    internal val listeners = def.listeners
-    internal val id = hashCode()
+    internal val parserSymbols = def.compileSymbols()
     internal val skip = def.skipDelegate.field
+    internal open val symbolListeners = def.resolveListeners()
+    @Suppress("LeakingThis") internal val id = hashCode()
 
     private val start = def.startDelegate.field
 
@@ -211,15 +191,14 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
         debug { "Defined with parser symbols $parserSymbols" }
     }
 
-    final override fun parse(input: String): Node<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
-    }
-
-    final override fun parse(input: RawSource): Node<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
-    }
+    final override fun parse(input: String): Node<*>? = parse(input.pivotIterator())
+    final override fun parse(input: RawSource): Node<*>? = parse(input.pivotIterator())
 
     final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
+
+    private fun parse(input: CharPivotIterator): Node<*>? {
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
+    }
 }
 
 /**
@@ -228,6 +207,9 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
 ) : NameableLexerlessParser(def), NullaryParser {
+    override val symbolListeners: Map<String, NullarySymbolListener<*>> get() = super.symbolListeners.unsafeCast()
+    override val listeners: Map<String, NullarySymbolListener<*>> by lazy { symbolListeners.toImmutableMap() }
+
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
@@ -253,10 +235,14 @@ public class NamedNullaryLexerlessParser internal constructor(
 /**
  * A lexerless parser that takes an argument.
  */
-public class UnaryLexerlessParser<ArgumentT> internal constructor(
+public class UnaryLexerlessParser<in ArgumentT> internal constructor(
     def: UnaryLexerlessParserDefinition<ArgumentT>
 ) : NameableLexerlessParser(def), UnaryParser<ArgumentT> {
     internal val initializer = def.initializer
+
+    override val symbolListeners: Map<String, UnarySymbolListener<*, ArgumentT>>
+        get() = super.symbolListeners.unsafeCast()
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> by lazy { symbolListeners.toImmutableMap() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -269,7 +255,7 @@ public class UnaryLexerlessParser<ArgumentT> internal constructor(
 /**
  * A named lexerless parser that takes one argument.
  */
-public class NamedUnaryLexerlessParser<ArgumentT> internal constructor(
+public class NamedUnaryLexerlessParser<in ArgumentT> internal constructor(
     override val name: String,
     internal val unnamed: UnaryLexerlessParser<ArgumentT>
 ) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, LexerlessParser {
@@ -292,7 +278,7 @@ public sealed interface Lexer {
     public fun tokenize(input: String): List<Token>
 
     /**
-     * Returns a list of tokens representing the input.
+     * See [tokenize] for details.
      */
     public fun tokenize(input: RawSource): List<Token>
 }
@@ -300,12 +286,22 @@ public sealed interface Lexer {
 /**
  * A parser that tokenizes its input before parsing.
  */
-public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, Lexer, Parser {
+public sealed interface LexerParser : Lexer, Parser {
+    /**
+     * See [parse] for details.
+     */
+    public fun parse(input: List<Token>): Node<*>?
+}
+
+/**
+ * A nameable lexer-parser.
+ */
+public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, LexerParser {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
 
-    internal val parserSymbols = def.resolveSymbols()
-    internal val listeners = def.listeners
-    internal val id = hashCode()
+    internal val parserSymbols = def.compileSymbols()
+    internal open val symbolListeners = def.resolveListeners()
+    @Suppress("LeakingThis") internal val id = hashCode()
 
     private val lexerSymbols = def.lexerSymbols
     private val start = def.startDelegate.field
@@ -324,8 +320,12 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = parse(input.pivotIterator())
-    final override fun parse(input: RawSource): Node<*>? = parse(input.pivotIterator())
+    final override fun parse(input: String): Node<*>? = parse(tokenize(input.pivotIterator()))
+    final override fun parse(input: RawSource): Node<*>? = parse(tokenize(input.pivotIterator()))
+
+    final override fun parse(input: List<Token>): Node<*>? {
+        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input.pivotIterator(), null))
+    }
 
     // Defensive copy
     final override fun tokenize(input: String): List<Token> = tokenize(input.pivotIterator()).toList()
@@ -333,12 +333,8 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
 
     final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
-    private fun parse(input: CharPivotIterator): Node<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(tokenize(input).pivotIterator()))
-    }
-
     private fun tokenize(input: CharPivotIterator): List<Token> {
-        val metadata = ParserMetadata(input)
+        val metadata = ParserMetadata(input, null)
         val tokens = mutableListOf<Token>()
         var inRecovery = false
         var recoveryIndex = 0
@@ -372,7 +368,10 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
  */
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
-) : NameableLexerParser(def), NullaryParser, Lexer {
+) : NameableLexerParser(def), NullaryParser, LexerParser {
+    override val symbolListeners: Map<String, NullarySymbolListener<*>> get() = super.symbolListeners.unsafeCast()
+    override val listeners: Map<String, NullarySymbolListener<*>> by lazy { symbolListeners.toImmutableMap() }
+
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
@@ -387,7 +386,9 @@ public class NullaryLexerParser internal constructor(
 public class NamedNullaryLexerParser internal constructor(
     override val name: String,
     internal val unnamed: NullaryLexerParser
-) : NamedNullaryParser, NullaryParser by unnamed, Lexer by unnamed {
+) : NamedNullaryParser, NullaryParser, LexerParser by unnamed {
+    override val listeners: Map<String, NullarySymbolListener<*>> get() = unnamed.listeners
+
     init {
         debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
@@ -398,10 +399,14 @@ public class NamedNullaryLexerParser internal constructor(
 /**
  * A [NameableLexerParser] that takes one argument.
  */
-public class UnaryLexerParser<ArgumentT> internal constructor(
+public class UnaryLexerParser<in ArgumentT> internal constructor(
     def: UnaryLexerParserDefinition<ArgumentT>
-) : NameableLexerParser(def), UnaryParser<ArgumentT>, Lexer {
+) : NameableLexerParser(def), UnaryParser<ArgumentT> {
     internal val initializer = def.base.initializer
+
+    override val symbolListeners: Map<String, UnarySymbolListener<*, ArgumentT>>
+        get() = super.symbolListeners.unsafeCast()
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> by lazy { symbolListeners.toImmutableMap() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -414,10 +419,12 @@ public class UnaryLexerParser<ArgumentT> internal constructor(
 /**
  * A named [NameableLexerParser] that takes one argument.
  */
-public class NamedUnaryLexerParser<ArgumentT> internal constructor(
+public class NamedUnaryLexerParser<in ArgumentT> internal constructor(
     override val name: String,
     internal val unnamed: UnaryLexerParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, Lexer by unnamed {
+) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT>, LexerParser by unnamed {
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> get() = unnamed.listeners
+
     init {
         debug { "Named ${unnamed.id.toString(radix = 16)}" }
     }
