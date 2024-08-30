@@ -3,7 +3,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.github.aeckar.power-parse"
+    group = "io.github.aeckar.modular-parsers"
     version = "1.0.0-RC"
 }
 

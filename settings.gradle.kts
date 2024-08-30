@@ -16,6 +16,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "power-parse"
+rootProject.name = "modular-parsers"
 
 include(":core")

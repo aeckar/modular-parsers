@@ -1,3 +1,4 @@
+@file:JvmName("Nodes")
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.JunctionNode
@@ -130,11 +131,10 @@ internal class RepetitionNode<SubMatchT : Symbol> internal constructor(
 /**
  * The index of the option matched by the symbol emitting this token.
  */
-@get:JvmName("matchOrdinal\$ImplicitJunction")
 public val Node<out TypeUnsafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
 
 /**
  * The index of the option matched by the symbol emitting this token.
  */
-@get:JvmName("matchOrdinal\$TypeSafeJunction")
+@get:JvmName("typeSafeMatchOrdinal")
 public val Node<TypeSafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal

@@ -18,7 +18,7 @@ publishing {
 
         // Provide artifacts information required by Maven Central
         pom {
-            name.set("Power Parse")
+            name.set("modular-parsers")
             description.set("Type-safe parser-combinators for Kotlin Multiplatform")
             url.set("https://github.com/Kotlin/multiplatform-library-template")
 
@@ -37,7 +37,7 @@ publishing {
                 }
             }
             scm {
-                url.set("https://github.com/aeckar/power-parse")
+                url.set("https://github.com/aeckar/modular-parsers")
             }
         }
     }

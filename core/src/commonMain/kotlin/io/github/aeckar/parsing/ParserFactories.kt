@@ -1,8 +1,10 @@
+@file:JvmName("ParserFactories")
 package io.github.aeckar.parsing
 
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
+import kotlin.jvm.JvmName
 
 /**
  * Creates a new [NameableLexerlessParser].
