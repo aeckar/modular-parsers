@@ -1,6 +1,6 @@
 package io.github.aeckar.parsing.utils
 
-import io.github.aeckar.parsing.Node
+import io.github.aeckar.parsing.SyntaxTreeNode
 import io.github.oshai.kotlinlogging.*
 
 private val logger = object : KLogger {
@@ -35,6 +35,6 @@ internal fun Any?.debugMatchFail(lazyReason: () -> String = { "" }) {
 /**
  * Prepends this object to the debug message.
  */
-internal fun Any?.debugMatchSuccess(result: Node<*>) {
+internal fun Any?.debugMatchSuccess(result: SyntaxTreeNode<*>) {
     logger.debug { "Match succeeded (substring = ${result.substring.withEscapes()}) @ $this"}
 }

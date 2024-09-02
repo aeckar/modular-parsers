@@ -1,6 +1,6 @@
 package io.github.aeckar.parsing.typesafe
 
-import io.github.aeckar.parsing.Node
+import io.github.aeckar.parsing.SyntaxTreeNode
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 
@@ -11,9 +11,9 @@ import kotlinx.collections.immutable.toImmutableList
 internal class JunctionNode(
     symbol: TypeSafeJunction<*>,
     substring: String,
-    match: Node<*>,
+    match: SyntaxTreeNode<*>,
     val matchOrdinal: Int
-) : Node<TypeSafeJunction<*>>(symbol, substring) {
+) : SyntaxTreeNode<TypeSafeJunction<*>>(symbol, substring) {
     override val children = persistentListOf(match)
 }
 
@@ -24,7 +24,7 @@ internal class JunctionNode(
 internal class SequenceNode(
     symbol: TypeSafeSequence<*>,
     substring: String,
-    val branches: List<Node<*>>
-) : Node<TypeSafeSequence<*>>(symbol, substring) {
+    val branches: List<SyntaxTreeNode<*>>
+) : SyntaxTreeNode<TypeSafeSequence<*>>(symbol, substring) {
     override val children by lazy { branches.toImmutableList() }
 }

@@ -29,12 +29,12 @@ public sealed interface Parser {
     /**
      * Returns the root node of the abstract syntax tree representing the input, if one exists.
      */
-    public fun parse(input: String): Node<*>?
+    public fun parse(input: String): SyntaxTreeNode<*>?
 
     /**
      * See [parse] for details.
      */
-    public fun parse(input: RawSource): Node<*>?
+    public fun parse(input: RawSource): SyntaxTreeNode<*>?
 }
 
 internal fun Parser.resolveSymbols(): Map<String, NameableSymbol<*>> = when (this) {
@@ -83,7 +83,7 @@ public sealed interface NullaryParser : Parser {
  *
  * @return the root node of the resulting AST
  */
-public operator fun NullaryParser.invoke(input: String): Node<*>? {
+public operator fun NullaryParser.invoke(input: String): SyntaxTreeNode<*>? {
     val ast = parse(input)
     ast?.forEach(::invokeListener)
     return ast
@@ -92,16 +92,16 @@ public operator fun NullaryParser.invoke(input: String): Node<*>? {
 /**
  * See [NullaryParser.invoke] for details.
  */
-public operator fun NullaryParser.invoke(input: RawSource): Node<*>? {
+public operator fun NullaryParser.invoke(input: RawSource): SyntaxTreeNode<*>? {
     val ast = parse(input)
     ast?.forEach(::invokeListener)
     return ast
 }
 
-private fun NullaryParser.invokeListener(node: Node<*>) {
-    listeners[toString()]
+private fun NullaryParser.invokeListener(node: SyntaxTreeNode<*>) {
+    listeners[node.toString()]
         ?.unsafeCast<NullarySymbolListener<Symbol>>()
-        ?.apply { node.unsafeCast<Node<Symbol>>()() }
+        ?.apply { node.unsafeCast<SyntaxTreeNode<Symbol>>()() }
 }
 
 /**
@@ -125,7 +125,7 @@ public sealed interface UnaryParser<in ArgumentT> : Parser {
  * The argument passed to this function is also passed to each listener.
  * @return the root node of the resulting AST
  */
-public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): Node<*>? {
+public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: String): SyntaxTreeNode<*>? {
     resolveInitializer()?.let { it(argument) }
     val ast = parse(input)
     ast?.forEach { invokeListener(argument, it) }
@@ -135,7 +135,7 @@ public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: Argument
 /**
  * See [UnaryParser.invoke] for details.
  */
-public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): Node<*>? {
+public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: ArgumentT, input: RawSource): SyntaxTreeNode<*>? {
     resolveInitializer()?.let { it(argument) }
     val ast = parse(input)
     ast?.forEach { invokeListener(argument, it) }
@@ -149,10 +149,10 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.resolveInitializer() = when (this
     is NamedUnaryLexerlessParser -> unnamed.initializer
 }
 
-private fun <ArgumentT> UnaryParser<ArgumentT>.invokeListener(argument: ArgumentT, node: Node<*>) {
-    resolveListeners()[toString()]
+private fun <ArgumentT> UnaryParser<ArgumentT>.invokeListener(argument: ArgumentT, node: SyntaxTreeNode<*>) {
+    resolveListeners()[node.toString()]
         ?.unsafeCast<UnarySymbolListener<Symbol, ArgumentT>>()
-        ?.apply { node.unsafeCast<Node<Symbol>>()(argument) }
+        ?.apply { node.unsafeCast<SyntaxTreeNode<Symbol>>()(argument) }
 }
 
 /**
@@ -191,12 +191,12 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
         debug { "Defined with parser symbols $parserSymbols" }
     }
 
-    final override fun parse(input: String): Node<*>? = parse(input.pivotIterator())
-    final override fun parse(input: RawSource): Node<*>? = parse(input.pivotIterator())
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.pivotIterator())
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.pivotIterator())
 
     final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
 
-    private fun parse(input: CharPivotIterator): Node<*>? {
+    private fun parse(input: CharPivotIterator): SyntaxTreeNode<*>? {
         return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
     }
 }
@@ -213,7 +213,7 @@ public class NullaryLexerlessParser internal constructor(
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
-    ): ReadOnlyProperty<Nothing?, NamedNullaryLexerlessParser> {
+    ): ReadOnlyProperty<Any?, NamedNullaryLexerlessParser> {
         return NamedNullaryLexerlessParser(property.name, this).readOnlyProperty()
     }
 }
@@ -247,7 +247,7 @@ public class UnaryLexerlessParser<in ArgumentT> internal constructor(
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
-    ): ReadOnlyProperty<Nothing?, NamedUnaryLexerlessParser<ArgumentT>> {
+    ): ReadOnlyProperty<Any?, NamedUnaryLexerlessParser<ArgumentT>> {
         return NamedUnaryLexerlessParser(property.name, this).readOnlyProperty()
     }
 }
@@ -290,7 +290,7 @@ public sealed interface LexerParser : Lexer, Parser {
     /**
      * See [parse] for details.
      */
-    public fun parse(input: List<Token>): Node<*>?
+    public fun parse(input: List<Token>): SyntaxTreeNode<*>?
 }
 
 /**
@@ -320,10 +320,10 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
         }.toImmutableMap()
     }
 
-    final override fun parse(input: String): Node<*>? = parse(tokenize(input.pivotIterator()))
-    final override fun parse(input: RawSource): Node<*>? = parse(tokenize(input.pivotIterator()))
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.pivotIterator()))
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.pivotIterator()))
 
-    final override fun parse(input: List<Token>): Node<*>? {
+    final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
         return (start ?: raiseUndefinedStart()).match(ParserMetadata(input.pivotIterator(), null))
     }
 
@@ -375,7 +375,7 @@ public class NullaryLexerParser internal constructor(
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
-    ): ReadOnlyProperty<Nothing?, NamedNullaryLexerParser> {
+    ): ReadOnlyProperty<Any?, NamedNullaryLexerParser> {
         return NamedNullaryLexerParser(property.name, this).readOnlyProperty()
     }
 }
@@ -411,7 +411,7 @@ public class UnaryLexerParser<in ArgumentT> internal constructor(
     override fun provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
-    ): ReadOnlyProperty<Nothing?, NamedUnaryLexerParser<ArgumentT>> {
+    ): ReadOnlyProperty<Any?, NamedUnaryLexerParser<ArgumentT>> {
         return NamedUnaryLexerParser(property.name, this).readOnlyProperty()
     }
 }

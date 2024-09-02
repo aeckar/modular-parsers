@@ -7,7 +7,7 @@ import io.github.aeckar.parsing.utils.unsafeCast
 /**
  * A symbol providing type-safe access to its components.
  *
- * Enables type-safe access to children of each [Node] produced by this symbol.
+ * Enables type-safe access to children of each [SyntaxTreeNode] produced by this symbol.
  */
 public abstract class TypeSafeSymbol<
     TypeUnsafeT : TypeUnsafeSymbol<InheritorT, TypeUnsafeT>,
@@ -15,8 +15,8 @@ public abstract class TypeSafeSymbol<
 > internal constructor(internal val typeUnsafe: TypeUnsafeT) : NameableSymbol<InheritorT>() {
     final override fun unwrap() = typeUnsafe
 
-    final override fun match(data: ParserMetadata): Node<*>? {
-        return typeUnsafe.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+    final override fun match(data: ParserMetadata): SyntaxTreeNode<*>? {
+        return typeUnsafe.match(data)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
     }
 
     final override fun resolveRawName() = typeUnsafe.rawName

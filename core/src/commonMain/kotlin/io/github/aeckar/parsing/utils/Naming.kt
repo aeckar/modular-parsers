@@ -3,8 +3,8 @@ package io.github.aeckar.parsing.utils
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
-internal fun <ValueT, PropertyT : ReadOnlyProperty<Nothing?, ValueT>> ValueT.readOnlyProperty(): PropertyT {
-    return ReadOnlyProperty<Nothing?, ValueT> { _, _ -> this }.unsafeCast()
+internal fun <ValueT, PropertyT : ReadOnlyProperty<Any?, ValueT>> ValueT.readOnlyProperty(): PropertyT {
+    return ReadOnlyProperty<Any?, ValueT> { _, _ -> this }.unsafeCast()
 }
 
 /**
@@ -15,7 +15,7 @@ public interface Nameable {
     /**
      * Assigns the delegated property a named wrapper containing this instance.
      */
-    public operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Nothing?, Named>
+    public operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, Named>
 }
 
 /**

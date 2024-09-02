@@ -1,6 +1,12 @@
 package io.github.aeckar.parsing
 
 /**
+ * TODO
+ */
+@DslMarker
+public annotation class ListenerDsl
+
+/**
  * An action performed whenever a successful match is made to a symbol.
  */
 public sealed interface SymbolListener
@@ -12,7 +18,7 @@ public fun interface NullarySymbolListener<MatchT : Symbol> : SymbolListener {
     /**
      * Invokes the lambda that defines the listener of a specific named symbol.
      */
-    public operator fun Node<MatchT>.invoke()
+    public operator fun SyntaxTreeNode<MatchT>.invoke()
 }
 
 /**
@@ -24,5 +30,5 @@ public fun interface UnarySymbolListener<MatchT : Symbol, in ArgumentT> : Symbol
      *
      * Includes the argument passed to the parser.
      */
-    public operator fun Node<MatchT>.invoke(argument: ArgumentT)
+    public operator fun SyntaxTreeNode<MatchT>.invoke(argument: ArgumentT)
 }

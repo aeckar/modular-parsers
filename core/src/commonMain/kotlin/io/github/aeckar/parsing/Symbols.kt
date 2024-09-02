@@ -8,7 +8,7 @@ private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)
 /**
  * Returns the concatenation of the substrings of all elements in this list.
  */
-private fun List<Node<*>>.concatenate() = joinToString("") { it.substring }
+private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substring }
 
 // ------------------------------ generic symbols ------------------------------
 
@@ -31,7 +31,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
      * 3. Appends this symbol to the top of the fail stack if not matched
      * 4. Returns the result
      */
-    internal inline fun <MatchT : Node<*>?> matching(
+    internal inline fun <MatchT : SyntaxTreeNode<*>?> matching(
         data: ParserMetadata,
         crossinline block: () -> MatchT
     ) = with(data) {
@@ -77,7 +77,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
      */
     internal open fun unwrap() = this
 
-    internal abstract fun match(data: ParserMetadata): Node<*>?
+    internal abstract fun match(data: ParserMetadata): SyntaxTreeNode<*>?
 
     /**
      * Returns the name assigned to this symbol if it exists, else its EBNF representation.
@@ -115,7 +115,7 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
     final override fun unwrap() = unnamed
 
     override fun match(data: ParserMetadata) = matching(data) {
-        val result = unnamed.match(data)?.also { it.unsafeCast<Node<Symbol>>().source = this }
+        val result = unnamed.match(data)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
         data.input.removeSave()
         result
     }
@@ -188,7 +188,7 @@ public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<Lex
     override fun unwrap() = start.root.unwrap()
 
     override fun match(data: ParserMetadata) = matching(data) {
-        val result = start.lex(data)?.let { Node(this, it) }
+        val result = start.lex(data)?.let { SyntaxTreeNode(this, it) }
         data.input.removeSave()
         result
     }
@@ -216,7 +216,7 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
         input.revert()
         takeIf { matchExists }?.let {
             input.advance(if (input is CharPivotIterator) literal.length else 1)
-            Node(this, literal)
+            SyntaxTreeNode(this, literal)
         }
     }
 
@@ -247,7 +247,7 @@ public class Switch internal constructor(
         input.revert()
         takeIf { matchExists }?.let {
             input.advance(1)
-            Node(this, substring)
+            SyntaxTreeNode(this, substring)
         }
     }
 
@@ -269,8 +269,8 @@ public class Switch internal constructor(
 public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
     override fun match(data: ParserMetadata) = matching(data) {
         val input = data.input
-        var subMatch: Node<SubMatchT>? = query.match(data).unsafeCast()
-        val subMatches = mutableListOf<Node<SubMatchT>>()
+        var subMatch: SyntaxTreeNode<SubMatchT>? = query.match(data).unsafeCast()
+        val subMatches = mutableListOf<SyntaxTreeNode<SubMatchT>>()
         debug { "Attempting matches to query ${query.rawName}" }
         while (subMatch != null) {
             subMatches += subMatch
@@ -299,7 +299,7 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     private val emptyMatch = OptionNode(this, "", null)
 
-    override fun match(data: ParserMetadata): Node<*> { // Fail check & pivoting unnecessary
+    override fun match(data: ParserMetadata): SyntaxTreeNode<*> { // Fail check & pivoting unnecessary
         debug { "Matching to query ${query.rawName} or empty match" }
         data.callStack += this
         val result = query.match(data)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
@@ -319,7 +319,7 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
 public class Inversion(
     private val exclusion: NamedSymbol<*>
 ) : SimpleSymbol<Inversion>() {
-    internal var origin: Parser by OnceAssignable(throws = ::IllegalStateException)
+    internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
     override fun match(data: ParserMetadata) = matching(data) {
         origin.resolveSymbols().values.asSequence()
@@ -354,7 +354,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
             }
             .withIndex()
             .find { it.value != null }
-            ?.unsafeCast<IndexedValue<Node<*>>>()
+            ?.unsafeCast<IndexedValue<SyntaxTreeNode<*>>>()
             ?.let { JunctionNode(typeSafe, it.value.substring, it.value, it.index) }
         data.input.removeSave()
         result
@@ -384,8 +384,8 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             input.removeSave()
             return@matching null
         }
-        var subMatch: Node<*>?
-        val subMatches = mutableListOf<Node<*>>()
+        var subMatch: SyntaxTreeNode<*>?
+        val subMatches = mutableListOf<SyntaxTreeNode<*>>()
         for (query in components) {
             subMatch = query.match(data)
             if (subMatch == null) {

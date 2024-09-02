@@ -14,8 +14,9 @@ import kotlin.reflect.KProperty
  *
  * Each listener is invoked from a completed [abstract syntax tree][Parser.parse] in a top-down, left-to-right fashion.
  */
+@ListenerDsl
 public sealed class ParserDefinition {
-    internal val startDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
+    internal val startDelegate = OnceAssignable<Symbol, _>(raise = ::MalformedParserException)
 
     /**
      * The principal symbol to be matched.
@@ -121,8 +122,6 @@ public sealed class ParserDefinition {
     public abstract inner class SymbolImport<ForeignT : ForeignSymbol<*>> : Nameable {
         internal abstract val origin: Parser
 
-        abstract override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Nothing?, Named>
-
         protected fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
                 origin.resolveSymbols().getValue(name)
@@ -154,7 +153,7 @@ public sealed class ParserDefinition {
         override fun provideDelegate(
             thisRef: Any?,
             property: KProperty<*>
-        ): ReadOnlyProperty<Nothing?, NullaryForeignSymbol<UnnamedT>> {
+        ): ReadOnlyProperty<Any?, NullaryForeignSymbol<UnnamedT>> {
             return NullaryForeignSymbol<UnnamedT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
                 .readOnlyProperty()
         }
@@ -169,7 +168,7 @@ public sealed class ParserDefinition {
         override fun provideDelegate(
             thisRef: Any?,
             property: KProperty<*>
-        ): ReadOnlyProperty<Nothing?, UnaryForeignSymbol<UnnamedT, ArgumentT>> {
+        ): ReadOnlyProperty<Any?, UnaryForeignSymbol<UnnamedT, ArgumentT>> {
             return UnaryForeignSymbol<UnnamedT, ArgumentT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
                 .readOnlyProperty()
         }
@@ -380,7 +379,7 @@ internal fun <ArgumentT>
  * Defines a scope where a [Parser] without a lexer can be defined.
  */
 public sealed class LexerlessParserDefinition : ParserDefinition() {
-    internal val skipDelegate = OnceAssignable<Symbol, _>(throws = ::MalformedParserException)
+    internal val skipDelegate = OnceAssignable<Symbol, _>(raise = ::MalformedParserException)
 
     /**
      * The symbol whose matches are discarded during parsing.
