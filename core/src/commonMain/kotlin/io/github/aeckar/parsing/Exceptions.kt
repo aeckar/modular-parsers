@@ -1,7 +1,7 @@
 package io.github.aeckar.parsing
 
 /**
- * Thrown when a [parser definition][parser] is malformed.
+ * Thrown when a [parser] or [lexer-parser][lexerParser] definition is malformed.
  */
 public class MalformedParserException @PublishedApi internal constructor(
     message: String, cause: Throwable? = null) : RuntimeException(message, cause)

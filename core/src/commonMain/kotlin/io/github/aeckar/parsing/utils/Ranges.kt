@@ -4,6 +4,11 @@ import io.github.aeckar.parsing.MalformedParserException
 import io.github.aeckar.parsing.Switch
 
 /**
+ * Returns true if this is in any member of [ranges].
+ */
+public infix fun Char.satisfies(ranges: List<CharRange>): Boolean = ranges.any { this in it }
+
+/**
  * Returns a list of character ranges that can used by [Switch] symbols.
  * @see rangesToString
  */

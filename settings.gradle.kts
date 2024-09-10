@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 rootProject.name = "modular-parsers"
 
 include(":core")
+include(":antlr4-interop")

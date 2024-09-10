@@ -3,7 +3,7 @@ package io.github.aeckar.parsing.utils
 import io.github.aeckar.parsing.SyntaxTreeNode
 import io.github.oshai.kotlinlogging.*
 
-private val logger = object : KLogger {
+private val logger = object : KLogger { // TODO replace with actual logger
     override val name: String
         get() = ""
 

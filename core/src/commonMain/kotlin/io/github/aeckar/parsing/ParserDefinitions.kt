@@ -1,5 +1,8 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.LexerSymbol.Behavior
+import io.github.aeckar.parsing.LexerSymbol.Descriptor
+import io.github.aeckar.parsing.LexerSymbol.Fragment
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 import io.github.aeckar.parsing.utils.toRanges
@@ -31,6 +34,7 @@ public sealed class ParserDefinition {
     internal val inversionSymbols = mutableSetOf<Inversion>()
 
     private val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
+    private val endSymbol = End()
 
     /**
      * @throws MalformedParserException the assertion fails
@@ -292,6 +296,13 @@ public sealed class ParserDefinition {
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
         return Sequence2(TypeUnsafeSequence(query1, query2).unsafeCast())
     }
+
+    // ------------------------------ end of input ------------------------------
+
+    /**
+     * Returns an [End] symbol.
+     */
+    public fun end(): End = endSymbol
 }
 
 /*
@@ -394,8 +405,11 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
     /**
      * Assigns a [Text] symbol of the single character to the property being delegated to.
      */
-    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<Text> {
-        return NamedSymbol(symbol.name, Text(this))
+    public operator fun Char.provideDelegate(
+        thisRef: Any?,
+        symbol: KProperty<*>
+    ): ReadOnlyProperty<Any?, NamedSymbol<Text>> {
+        return NamedSymbol(symbol.name, Text(this)).readOnlyProperty()
     }
 
     public final override fun text(query: String): Text = super.text(query).unsafeCast()
@@ -566,7 +580,7 @@ public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
  * Defines a scope where a [NameableLexerParser] can be defined.
  */
 public sealed class LexerParserDefinition : ParserDefinition() {
-    internal val recoveryDelegate = OnceAssignable<Symbol, _>(::MalformedParserException)
+    internal val recoveryDelegate = OnceAssignable<LexerComponent, _>(::MalformedParserException)
 
     /**
      * During [tokenization][Lexer.tokenize], if a sequence of characters cannot be matched to a named [LexerSymbol],
@@ -578,7 +592,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      * (e.g., if this is an [Option]).
      * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
-    public val recovery: Symbol by recoveryDelegate
+    public val recovery: LexerComponent by recoveryDelegate
 
     /**
      * The lexer symbols to be ignored during lexical analysis.
@@ -588,18 +602,73 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
 
-    internal val lexerSymbols = mutableListOf<NamedSymbol<LexerSymbol>>()
+    internal val lexerModes = mutableMapOf<String, MutableList<NamedSymbol<LexerSymbol>>>()
+
+    private var mode = ""   // default lexer mode name
+
+    // ------------------------------ lexer modes -------------------------
+
+    /**
+     * Signals that all lexer symbols defined hereafter and before the next mode
+     * should be used exclusively when in the specified lexer mode.
+     * @throws MalformedParserException [name] is invalid according to [isKotlinIdentifier]
+     */
+    public fun mode(name: String) {
+        if (!name.isKotlinIdentifier()) {
+            throw MalformedParserException("'$name' is an invalid lexer mode name")
+        }
+        mode = name
+    }
+
+    /**
+     * Signals that all lexer symbols defined hereafter and before the next mode
+     * should be used exclusively when in the default (initial) lexer mode.
+     */
+    public fun defaultMode() {
+        mode = ""
+    }
+
+    /**
+     * Specifies that the given behavior will be invoked whenever
+     * the lexer symbol produced by the returned descriptor produces a token.
+     */
+    public infix fun Fragment.does(behavior: Behavior): Descriptor = Descriptor(this, behavior)
+
+    /**
+     * Returns a behavior that pushes the specified mode to the lexer mode stack.
+     */
+    public fun push(mode: String): Behavior = Behavior { add(mode) }
+
+    /**
+     * Returns a behavior that pops the top mode from the lexer mode stack.
+     */
+    public fun pop(): Behavior =  Behavior { removeLast() }
+
+    /**
+     * Returns a behavior that replaces the top of the lexer mode stack with the specified mode.
+     */
+    public fun set(mode: String): Behavior = Behavior { this[lastIndex] = mode }
 
     // ------------------------------ symbol definition ------------------------------
 
     /**
      * Assigns a [LexerSymbol] matching this fragment to the property being delegated to.
      */
-    public operator fun SymbolFragment.provideDelegate(
+    public operator fun Fragment.provideDelegate(
         thisRef: Any?,
         symbol: KProperty<*>
     ): ReadOnlyProperty<Nothing?, NamedSymbol<LexerSymbol>> {
         return NamedSymbol(symbol.name, LexerSymbol(this)).readOnlyProperty()
+    }
+
+    /**
+     * Assigns a [LexerSymbol] matching this descriptor to the property being delegated to.
+     */
+    public operator fun Descriptor.provideDelegate(
+        thisRef: Any?,
+        symbol: KProperty<*>
+    ): ReadOnlyProperty<Nothing?, NamedSymbol<LexerSymbol>> {
+        return NamedSymbol(symbol.name, LexerSymbol(fragment, behavior)).readOnlyProperty()
     }
 
     // ------------------------------ text & switches ------------------------------
@@ -607,85 +676,94 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     /**
      * Assigns a [LexerSymbol] matching this character to the property being delegated to.
      */
-    public operator fun Char.getValue(thisRef: Any?, symbol: KProperty<*>): NamedSymbol<LexerSymbol> {
-        return NamedSymbol(symbol.name, LexerSymbol(SymbolFragment(Text(this)))).also { lexerSymbols += it }
+    public operator fun Char.provideDelegate(
+        thisRef: Any?,
+        symbol: KProperty<*>
+    ): ReadOnlyProperty<Any?, NamedSymbol<LexerSymbol>> {
+        val named = NamedSymbol(symbol.name, LexerSymbol(Fragment(Text(this))))
+        lexerModes.getValue(mode) += named
+        return named.readOnlyProperty()
     }
 
-    public final override fun text(query: String): SymbolFragment = SymbolFragment(Text(query))
-    public final override fun of(switch: String): SymbolFragment = SymbolFragment(super.of(switch).unsafeCast())
+    public final override fun text(query: String): Fragment = Fragment(Text(query))
+    public final override fun of(switch: String): Fragment {
+        return Fragment(super.of(switch).unsafeCast())
+    }
 
     // ------------------------------ options ------------------------------
 
     /**
      * Return an [Option] of the given fragment.
      */
-    public fun maybe(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(query.root))
+    public fun maybe(query: Fragment): Fragment = Fragment(maybe(query.root))
 
     /**
      * Returns a text [Option].
      */
-    public fun maybe(query: String): SymbolFragment = SymbolFragment(Option(Text(query)))
+    public fun maybe(query: String): Fragment = Fragment(Option(Text(query)))
 
     /**
      * Returns a text [Option].
      */
-    public fun maybe(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
+    public fun maybe(query: Char): Fragment = Fragment(Option(Text(query)))
 
     /**
      * Returns a switch [Option].
      */
-    public fun maybeOf(switch: String): SymbolFragment = SymbolFragment(maybe(super.of(switch) as Switch))
+    public fun maybeOf(switch: String): Fragment = Fragment(maybe(super.of(switch) as Switch))
 
     // ------------------------------ repetitions ------------------------------
 
     /**
      * Returns a [Repetition] of the given fragment.
      */
-    public fun multiple(query: SymbolFragment): SymbolFragment = SymbolFragment(multiple(query.root))
+    public fun multiple(query: Fragment): Fragment = Fragment(multiple(query.root))
 
     /**
      * Returns a text [Repetition].
      */
-    public fun multiple(query: String): SymbolFragment = SymbolFragment(Repetition(Text(query)))
+    public fun multiple(query: String): Fragment = Fragment(Repetition(Text(query)))
 
     /**
      * Returns a text [Repetition].
      */
-    public fun multiple(query: Char): SymbolFragment = SymbolFragment(Option(Text(query)))
+    public fun multiple(query: Char): Fragment = Fragment(Option(Text(query)))
 
     /**
      * Returns a switch [Repetition].
      */
-    public fun multipleOf(switch: String): SymbolFragment = SymbolFragment(multiple(super.of(switch) as Switch))
+    public fun multipleOf(switch: String): Fragment {
+        return Fragment(multiple(super.of(switch) as Switch))
+    }
 
     // ------------------------------ optional repetitions ------------------------------
 
     /**
      * Returns an optional repetition of the given fragment.
      */
-    public fun any(query: SymbolFragment): SymbolFragment = SymbolFragment(maybe(multiple(query.root)))
+    public fun any(query: Fragment): Fragment = Fragment(maybe(multiple(query.root)))
 
     /**
      * Returns an optional repetition of the text.
      */
-    public fun any(query: String): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
+    public fun any(query: String): Fragment = Fragment(maybe(multiple(Text(query))))
 
     /**
      * Returns an optional repetition of the text.
      */
-    public fun any(query: Char): SymbolFragment = SymbolFragment(maybe(multiple(Text(query))))
+    public fun any(query: Char): Fragment = Fragment(maybe(multiple(Text(query))))
 
     /**
      * Returns an optional repetition of the switch.
      */
-    public fun anyOf(switch: String): SymbolFragment = SymbolFragment(any(super.of(switch) as Switch))
+    public fun anyOf(switch: String): Fragment = Fragment(any(super.of(switch) as Switch))
 
     // ------------------------------ junctions ------------------------------
 
     /**
      * Returns a junction of the two fragments.
      */
-    public infix fun SymbolFragment.or(option2: SymbolFragment): SymbolFragment {
+    public infix fun Fragment.or(option2: Fragment): Fragment {
         val other = option2.root
         if (root is TypeUnsafeJunction<*>) {
             root.components += other
@@ -695,30 +773,30 @@ public sealed class LexerParserDefinition : ParserDefinition() {
             other.components += root
             return option2
         }
-        return SymbolFragment(TypeUnsafeJunction(root, other))
+        return Fragment(TypeUnsafeJunction(root, other))
     }
 
     /**
      * Returns a junction of this text and the given fragment.
      */
-    public infix fun Char.or(option2: SymbolFragment): SymbolFragment {
+    public infix fun Char.or(option2: Fragment): Fragment {
         val other = option2.root
         if (other is TypeUnsafeJunction<*>) {
             other.components += Text(this)
             return option2
         }
-        return SymbolFragment(TypeUnsafeJunction(Text(this), other))
+        return Fragment(TypeUnsafeJunction(Text(this), other))
     }
 
     /**
      * Returns a junction of this fragment and the given text.
      */
-    public infix fun SymbolFragment.or(option2: Char): SymbolFragment {
+    public infix fun Fragment.or(option2: Char): Fragment {
         if (root is TypeUnsafeJunction<*>) {
             root.components += Text(option2)
             return this
         }
-        return SymbolFragment(TypeUnsafeJunction(Text(option2), root))
+        return Fragment(TypeUnsafeJunction(Text(option2), root))
     }
 
     // ------------------------------ sequences ------------------------------
@@ -726,7 +804,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     /**
      * Returns a sequence containing the two fragments
      */
-    public operator fun SymbolFragment.plus(query2: SymbolFragment): SymbolFragment {
+    public operator fun Fragment.plus(query2: Fragment): Fragment {
         val other = query2.root
         if (root is TypeUnsafeSequence<*>) {
             root.components += other
@@ -736,30 +814,30 @@ public sealed class LexerParserDefinition : ParserDefinition() {
             other.components += root
             return query2
         }
-        return SymbolFragment(TypeUnsafeSequence(root, other))
+        return Fragment(TypeUnsafeSequence(root, other))
     }
 
     /**
      * Returns a sequence containing this text and the given fragment.
      */
-    public operator fun Char.plus(query2: SymbolFragment): SymbolFragment {
+    public operator fun Char.plus(query2: Fragment): Fragment {
         val other = query2.root
         if (other is TypeUnsafeSequence<*>) {
             other.components += Text(this)
             return query2
         }
-        return SymbolFragment(TypeUnsafeSequence(Text(this), other))
+        return Fragment(TypeUnsafeSequence(Text(this), other))
     }
 
     /**
      * Returns a sequence containing this fragment and the given text.
      */
-    public operator fun SymbolFragment.plus(query2: Char): SymbolFragment {
+    public operator fun Fragment.plus(query2: Char): Fragment {
         if (root is TypeUnsafeSequence<*>) {
             root.components += Text(query2)
             return this
         }
-        return SymbolFragment(TypeUnsafeSequence(Text(query2), root))
+        return Fragment(TypeUnsafeSequence(Text(query2), root))
     }
 }
 

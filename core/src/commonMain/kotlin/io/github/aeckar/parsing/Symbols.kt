@@ -17,12 +17,7 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
  *
  * The building block of a parser rule.
  */
-public abstract class Symbol internal constructor() : ParserComponent {
-    /**
-     * The name assigned to this symbol if it exists, else its EBNF representation.
-     */
-    internal abstract val rawName: String
-
+public abstract class Symbol internal constructor() : ParserComponent() {
     /**
      * Returns null if this symbol is in the top of the fail stack, and logs the failure.
      * Otherwise, performs the following:
@@ -70,19 +65,7 @@ public abstract class Symbol internal constructor() : ParserComponent {
         data.failStack += mutableListOf<Symbol>()
     }
 
-    /**
-     * If this symbol is a wrapper of another symbol, returned the wrapped instance.
-     *
-     * Symbol wrappers include [TypeSafeSymbol] and [NamedSymbol].
-     */
-    internal open fun unwrap() = this
-
     internal abstract fun match(data: ParserMetadata): SyntaxTreeNode<*>?
-
-    /**
-     * Returns the name assigned to this symbol if it exists, else its EBNF representation.
-     */
-    final override fun toString(): String = rawName
 }
 
 /**
@@ -184,11 +167,51 @@ public sealed class TypeUnsafeSymbol<
  *
  * Ensures separation between parser symbols literals.
  */
-public class LexerSymbol(private val start: SymbolFragment) : NameableSymbol<LexerSymbol>() {
-    override fun unwrap() = start.root.unwrap()
+public class LexerSymbol internal constructor(
+    private val start: Fragment,
+    private val behavior: Behavior = Behavior.NOTHING
+) : NameableSymbol<LexerSymbol>(), LexerComponent {
+    /**
+     * Can be combined with other fragments to create a named [LexerSymbol].
+     */
+    public class Fragment internal constructor(
+        internal val root: Symbol
+    ) : ParserComponent(), LexerComponent {
+        override val rawName get() = root.rawName
+
+        internal fun lex(data: ParserMetadata) = root.match(data)?.substring
+
+        override fun unwrap() = root.unwrap()
+    }
+
+    /**
+     * Designates a [Behavior] to a [Fragment].
+     *
+     * Can be delegated to a property to create a named [LexerSymbol].
+     */
+    public class Descriptor internal constructor(
+        internal val fragment: Fragment,
+        internal val behavior: Behavior
+    )
+
+    /**
+     * An action that a [LexerSymbol] performs on the current stack of lexer modes.
+     */
+    public class Behavior internal constructor(
+        internal val action: MutableList<String>.() -> Unit
+    ) {
+        internal companion object {
+            val NOTHING = Behavior {}
+        }
+    }
+
+    override fun unwrap() = start.unwrap()
 
     override fun match(data: ParserMetadata) = matching(data) {
-        val result = start.lex(data)?.let { SyntaxTreeNode(this, it) }
+        val result = start.lex(data)?.let {
+            data.modeStack.apply(behavior.action)
+            SyntaxTreeNode(this, it)
+        }
         data.input.removeSave()
         result
     }
@@ -238,7 +261,7 @@ public class Switch internal constructor(
         } else if (input is CharPivotIterator) {
             val next = input.peek()
             substring = next.toString()
-            ranges.any { next in it }
+            next satisfies ranges
         } else {
             val next = input.peek() as Token
             substring = next.substring
@@ -413,4 +436,21 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             components += Text("\n")
         }
     }
+}
+
+/**
+ * A symbol matching the end of some input.
+ */
+public class End : NameableSymbol<End>() {
+    override fun match(data: ParserMetadata): SyntaxTreeNode<*>? {
+        debug { "Matching to end of input" }
+        return if (data.input.isExhausted()) {
+            SyntaxTreeNode(this, "").apply(::debugMatchSuccess)
+        } else {
+            debugMatchFail()
+            null
+        }
+    }
+
+    override fun resolveRawName() = "<end of input>"
 }

@@ -301,23 +301,25 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
 
     internal val parserSymbols = def.compileSymbols()
     internal open val symbolListeners = def.resolveListeners()
-    @Suppress("LeakingThis") internal val id = hashCode()
+    internal val id = def.hashCode()
 
-    private val lexerSymbols = def.lexerSymbols
+    private val lexerModes: Map<String, List<NamedSymbol<LexerSymbol>>> = def.lexerModes
     private val start = def.startDelegate.field
-    private val recovery = def.recoveryDelegate.field
+    private val recovery = (def.recoveryDelegate.field as? ParserComponent)?.unwrap()
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
         debug { "Parser $id: Defined with parser symbols $parserSymbols" }
-        debug { "Parser $id: Defined with lexer symbols $lexerSymbols" }
+        debug { "Parser $id: Defined with lexer modes $lexerModes" }
     }
 
     final override val symbols: Map<String, NameableSymbol<*>> by lazy {
-        HashMap<String, NameableSymbol<*>>(parserSymbols.size + lexerSymbols.size).apply {
+        buildMap(parserSymbols.size + lexerModes.values.sumOf { it.size }) {
             putAll(parserSymbols)
-            putAll(lexerSymbols.associate { it.name to it.unnamed })
-        }.toImmutableMap()
+            for (mode in lexerModes.values) {
+                mode.forEach { put(it.name, it.unnamed) }
+            }
+        }
     }
 
     final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.pivotIterator()))
@@ -334,12 +336,12 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
     final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
     private fun tokenize(input: CharPivotIterator): List<Token> {
-        val metadata = ParserMetadata(input, null)
+        val metadata = ParserMetadata(input, null).apply { modeStack += "" }
         val tokens = mutableListOf<Token>()
         var inRecovery = false
         var recoveryIndex = 0
         while (input.hasNext()) {
-            val tokenNode = lexerSymbols.asSequence().mapNotNull { it.match(metadata) }.firstOrNull()
+            val tokenNode = lexerModes.getValue(metadata.modeStack.last()).firstNotNullOfOrNull { it.match(metadata) }
             if (tokenNode == null) { // Attempt error recovery
                 if (!inRecovery) {
                     inRecovery = true

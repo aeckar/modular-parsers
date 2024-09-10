@@ -5,15 +5,6 @@ import org.apache.velocity.runtime.resource.loader.FileResourceLoader
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val ordinals = listOf(
-    "first",    "second",
-    "third",    "fourth",
-    "fifth",    "sixth",
-    "seventh",  "eighth",
-    "ninth",    "tenth",
-    "eleventh", "twelfth"
-)
-
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
@@ -34,7 +25,6 @@ buildscript {
 kotlin {
     explicitApi()
 
-    jvm()
     androidTarget {
         publishLibraryVariants("release")
         @OptIn(ExperimentalKotlinGradlePluginApi::class)
@@ -42,6 +32,8 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_1_8)
         }
     }
+
+    jvm()
     iosX64()
     iosArm64()
     iosSimulatorArm64()
@@ -52,8 +44,8 @@ kotlin {
             kotlin.srcDirs("build/generated/sources/commonMain/kotlin")
             dependencies {
                 implementation(libs.kotlinx.io)
-                implementation(libs.kotlinx.collections.immutable)
                 implementation(libs.kotlin.logging)
+                implementation(libs.kotlinx.collections.immutable)
             }
         }
         commonTest {
@@ -66,7 +58,7 @@ kotlin {
 }
 
 android {
-    namespace = "io.github.aeckar.parsing"
+    namespace = "io.github.aeckar.parsing.core"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
@@ -77,6 +69,15 @@ android {
 tasks.register("generateTypeSafe") {
     group = "build"
     description = "Generates type-safe symbols, tokens, token extensions, and tuples"
+
+    val ordinals = listOf(
+        "first",    "second",
+        "third",    "fourth",
+        "fifth",    "sixth",
+        "seventh",  "eighth",
+        "ninth",    "tenth",
+        "eleventh", "twelfth"
+    )
 
     val resourcesPath = "${projectDir}/src/commonMain/resources"
     val typeSafePackage = "io/github/aeckar/parsing/typesafe"
