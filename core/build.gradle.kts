@@ -43,6 +43,7 @@ kotlin {
         commonMain {
             kotlin.srcDirs("build/generated/sources/commonMain/kotlin")
             dependencies {
+                implementation(project(":primitives"))
                 implementation(libs.kotlinx.io)
                 implementation(libs.kotlin.logging)
                 implementation(libs.kotlinx.collections.immutable)

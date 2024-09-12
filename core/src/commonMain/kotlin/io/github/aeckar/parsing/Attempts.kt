@@ -11,7 +11,7 @@ import io.github.aeckar.parsing.primitives.PivotIterator
  * For each match to a non-empty substring, the stack grows. During backtracking, it shrinks
  */
 internal class ParsingAttempt(
-    val input: PivotIterator<* /* Char | Token */, MatchAttempt, *>,
+    val input: MatchIterator<*, *>,
     var skip: Symbol?
 ) {
     /**

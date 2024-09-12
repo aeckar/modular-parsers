@@ -1,5 +1,4 @@
 @file:Suppress("DELEGATED_MEMBER_HIDES_SUPERTYPE_OVERRIDE")
-
 package io.github.aeckar.parsing.primitives
 
 import kotlinx.io.RawSource

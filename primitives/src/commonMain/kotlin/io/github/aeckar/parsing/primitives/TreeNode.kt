@@ -1,6 +1,5 @@
 package io.github.aeckar.parsing.primitives
 
-import io.github.aeckar.parsing.utils.unsafeCast
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.PersistentList
 
@@ -74,8 +73,8 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
      *
      * The first node returned is the bottom-left-most and the last node returned is this one.
      */
-    final override fun iterator(): Iterator<Self> = object : Iterator<Self> {
-        private var cursor: Self = this@TreeNode.unsafeCast()
+    final override fun iterator(): Iterator<Self> = @Suppress("UNCHECKED_CAST") object : Iterator<Self> {
+        private var cursor: Self = this@TreeNode as Self
         private val parentStack = mutableListOf<Self>()
         private val childIndices = IntStack()
         private var firstIteration = true

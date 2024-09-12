@@ -1,6 +1,5 @@
+@file:Suppress("DuplicatedCode")    // False positive
 package io.github.aeckar.parsing.primitives
-
-import io.github.aeckar.parsing.utils.unsafeCast
 
 /**
  * An element in a linked list.
@@ -51,7 +50,8 @@ public abstract class ListNode<Self : ListNode<Self>> {
         require(this !== node) { "Cannot append node to itself" }
         next?.apply { last = node }
         node.next = next
-        node.last = this.unsafeCast()
+        @Suppress("UNCHECKED_CAST")
+        node.last = this as Self
         next = node
     }
 
@@ -63,7 +63,8 @@ public abstract class ListNode<Self : ListNode<Self>> {
         require(this !== node) { "Cannot append node to itself" }
         last?.apply { next = node }
         node.last = last
-        node.next = this.unsafeCast()
+        @Suppress("UNCHECKED_CAST")
+        node.next = this as Self
         last = node
     }
 }
