@@ -6,12 +6,13 @@ class ParserTest {
     @Test
     fun f() {
         val example by parser {
+            val term by junction()
             val expression by junction()
-            val digit by of ("0123456789")
+
+            val digit by of("0123456789")
             val number by multiple(digit)
             val factor by '(' + expression + ')' or
                     number
-            val term by junction()
 
             term.actual = factor + '*' + term or
                     factor + '/' + term or

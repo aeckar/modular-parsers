@@ -36,5 +36,5 @@ internal fun Any?.debugMatchFail(lazyReason: () -> String = { "" }) {
  * Prepends this object to the debug message.
  */
 internal fun Any?.debugMatchSuccess(result: SyntaxTreeNode<*>) {
-    logger.debug { "Match succeeded (substring = ${result.substring.withEscapes()}) @ $this"}
+    logger.debug { "Match succeeded (substring = '${result.substring.withEscapes()}') @ $this"}
 }

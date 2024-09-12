@@ -36,7 +36,7 @@ public class IntStack private constructor(
     buffer: IntArray
 ) : Stack, Iterable<Int> {
     @PublishedApi
-    internal var buffer: IntArray = buffer
+    internal var buffer: IntArray = buffer  // Disallow random access
         private set
 
     /**
@@ -97,8 +97,8 @@ public class IntStack private constructor(
  */
 @JvmInline
 public value class BooleanStack internal constructor(
-    @PublishedApi internal val base: IntStack
-) : Stack by base, Iterable<Boolean> {
+    @PublishedApi internal val ints: IntStack
+) : Stack by ints, Iterable<Boolean> {
     /**
      * Returns an empty stack.
      */
@@ -107,32 +107,32 @@ public value class BooleanStack internal constructor(
     /**
      * Returns the top of the stack.
      */
-    public fun last(): Boolean = base.last() == 1
+    public fun last(): Boolean = ints.last() == 1
 
     /**
      * Modifies the top of the stack according to [action].
      */
     public inline fun mapLast(action: (Boolean) -> Boolean) {
-        base += if (action(base.removeLast() == 1)) 1 else 0
+        ints += if (action(ints.removeLast() == 1)) 1 else 0
     }
 
     /**
      * Pops the top element from the stack and returns its value.
      */
-    public fun removeLast(): Boolean = last().also { --base.size }
+    public fun removeLast(): Boolean = last().also { --ints.size }
 
     /**
      * Pushes [bool] to the top of the stack.
      */
     public operator fun plusAssign(bool: Boolean) {
-        base += if (bool) 1 else 0
+        ints += if (bool) 1 else 0
     }
 
     override fun iterator(): BooleanIterator {
-        val buffer = BooleanArray(base.size)
-        repeat(base.size) { buffer[it] = base.buffer[it] == 1 }
+        val buffer = BooleanArray(ints.size)
+        repeat(ints.size) { buffer[it] = ints.buffer[it] == 1 }
         return buffer.iterator()
     }
 
-    override fun toString(): String = base.asSequence().map { it == 1 }.joinToString(prefix = "[", postfix = "]")
+    override fun toString(): String = ints.asSequence().map { it == 1 }.joinToString(prefix = "[", postfix = "]")
 }

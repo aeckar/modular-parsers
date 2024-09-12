@@ -12,6 +12,7 @@ public sealed interface LexerComponent
  *
  * Can be delegated to a property to create a [NamedSymbol].
  */
+
 public sealed class ParserComponent {
     /**
      * The name assigned to this symbol if it exists, else its EBNF representation.
@@ -29,4 +30,13 @@ public sealed class ParserComponent {
      * Returns the name assigned to this symbol if it exists, else its EBNF representation.
      */
     final override fun toString(): String = rawName
+
+    final override fun equals(other: Any?): Boolean {
+        if (this === other) {
+            return true
+        }
+        return rawName == (other as? ParserComponent)?.rawName
+    }
+
+    final override fun hashCode(): Int = rawName.hashCode()
 }

@@ -3,7 +3,7 @@ package io.github.aeckar.parsing.utils
 import io.github.aeckar.parsing.MalformedParserException
 
 /**
- * Checked `as` casts should be preferred.
+ * Quiets `UNCHECKED_CAST` warning.
  */
 @PublishedApi
 @Suppress("UNCHECKED_CAST")
@@ -25,3 +25,9 @@ internal inline fun <reified T> Any.fragileUnsafeCast(): T {
         throw MalformedParserException("Cast to $t fails because object was cast to $r by user", e)
     }
 }
+
+/**
+ * Quiets `LeakingThis` warning.
+ * @return this
+ */
+internal fun <T> T.self() = this

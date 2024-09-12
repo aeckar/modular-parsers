@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.pivot.CharRevertibleIterator
+import io.github.aeckar.parsing.pivot.revertibleIterator
 import io.github.aeckar.parsing.utils.*
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
@@ -191,13 +193,13 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
         debug { "Defined with parser symbols $parserSymbols" }
     }
 
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.pivotIterator())
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.pivotIterator())
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.revertibleIterator())
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.revertibleIterator())
 
     final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
 
-    private fun parse(input: CharPivotIterator): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input, skip))
+    private fun parse(input: CharRevertibleIterator): SyntaxTreeNode<*>? {
+        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input, skip))
     }
 }
 
@@ -322,21 +324,21 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
         }
     }
 
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.pivotIterator()))
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.pivotIterator()))
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.revertibleIterator()))
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.revertibleIterator()))
 
     final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParserMetadata(input.pivotIterator(), null))
+        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.revertibleIterator(), null))
     }
 
     // Defensive copy
-    final override fun tokenize(input: String): List<Token> = tokenize(input.pivotIterator()).toList()
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.pivotIterator()).toList()
+    final override fun tokenize(input: String): List<Token> = tokenize(input.revertibleIterator()).toList()
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.revertibleIterator()).toList()
 
     final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
-    private fun tokenize(input: CharPivotIterator): List<Token> {
-        val metadata = ParserMetadata(input, null).apply { modeStack += "" }
+    private fun tokenize(input: CharRevertibleIterator): List<Token> {
+        val metadata = ParsingAttempt(input, null)
         val tokens = mutableListOf<Token>()
         var inRecovery = false
         var recoveryIndex = 0
@@ -404,7 +406,7 @@ public class NamedNullaryLexerParser internal constructor(
 public class UnaryLexerParser<in ArgumentT> internal constructor(
     def: UnaryLexerParserDefinition<ArgumentT>
 ) : NameableLexerParser(def), UnaryParser<ArgumentT> {
-    internal val initializer = def.base.initializer
+    internal val initializer = def.lexerless.initializer
 
     override val symbolListeners: Map<String, UnarySymbolListener<*, ArgumentT>>
         get() = super.symbolListeners.unsafeCast()

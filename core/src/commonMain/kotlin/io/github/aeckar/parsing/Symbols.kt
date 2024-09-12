@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.ParsingAttempt.Pivot
+import io.github.aeckar.parsing.pivot.CharRevertibleIterator
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 
@@ -27,45 +29,52 @@ public abstract class Symbol internal constructor() : ParserComponent() {
      * 4. Returns the result
      */
     internal inline fun <MatchT : SyntaxTreeNode<*>?> matching(
-        data: ParserMetadata,
+        attempt: ParsingAttempt,
         crossinline block: () -> MatchT
-    ) = with(data) {
+    ) = with(attempt) {
         val symbol = this@Symbol
-        if (symbol in failStack.last()) {
-            symbol.debugMatchFail { "Previous attempt failed" }
+        if (symbol in here().fails) {
+            symbol.debugMatchFail { "Previous match attempt failed" }
             return@with null
         }
-        callStack += symbol // Including symbol wrappers
+        here().successes[symbol]?.let {
+            symbol.debugMatchSuccess(it)
+            return@with it
+        }
+        symbol.debug { "Attempting match" }
+        here().symbols += symbol // Including symbol wrappers
         input.save()
         val result = block()
         if (result != null) {
             symbol.debugMatchSuccess(result)
+            here().successes[symbol] = result
+            if (result.substring.isNotEmpty()) {
+                pivotStack += Pivot()
+            }
         } else {
             symbol.debugMatchFail()
-            failStack.last() += symbol
+            here().fails += symbol
         }
-        callStack.removeLast()
         result
     }
 
     /**
      * Performs the following:
      * 1. Consumes the next substring matching the skip symbol, if not null
-     * 2. Pushes an empty list to the [fail stack][ParserMetadata.failStack]
+     * 2. Pushes an empty list to the [fail stack][ParsingAttempt.Pivot.fails]
      */
-    internal fun align(data: ParserMetadata) {
-        data.skip?.let {
-            debug { "Attempting match to skip ${data.skip}" }
-            val previousSkip = data.skip
-            data.skip = null
-            it.match(data)
-            data.skip = previousSkip
+    internal fun align(attempt: ParsingAttempt) {
+        attempt.skip?.let {
+            debug { "Attempting match to skip ${attempt.skip}" }
+            val previousSkip = attempt.skip
+            attempt.skip = null // Prevent infinite recursion
+            it.match(attempt)
+            attempt.skip = previousSkip
             debug { "End skip" }
         }
-        data.failStack += mutableListOf<Symbol>()
     }
 
-    internal abstract fun match(data: ParserMetadata): SyntaxTreeNode<*>?
+    internal abstract fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>?
 }
 
 /**
@@ -77,7 +86,7 @@ public abstract class Symbol internal constructor() : ParserComponent() {
  * - [Importing][ParserDefinition.import] of symbols from other parsers
  * - Definition of [recursive][TypeSafeSymbol] symbols
  */
-public abstract class NameableSymbol<InheritorT : NameableSymbol<InheritorT>> internal constructor() : Symbol() {
+public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal constructor() : Symbol() {
     final override val rawName: String by lazy { resolveRawName() }
 
     /**
@@ -97,9 +106,9 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 
     final override fun unwrap() = unnamed
 
-    override fun match(data: ParserMetadata) = matching(data) {
-        val result = unnamed.match(data)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
-        data.input.removeSave()
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val result = unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
+        attempt.input.removeSave()
         result
     }
 }
@@ -108,16 +117,16 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
  * A symbol [imported][ParserDefinition.import] from another parser.
  */
 public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
-    base: NamedSymbol<out UnnamedT>,
-) : NamedSymbol<UnnamedT>(base.name, base.unnamed) {
+    named: NamedSymbol<out UnnamedT>,
+) : NamedSymbol<UnnamedT>(named.name, named.unnamed) {
     internal abstract val origin: Parser
 
-    final override fun match(data: ParserMetadata) = matching(data) {
-        val previousSkip = data.skip
-        data.skip = (origin as? LexerlessParser)?.resolveSkip()
-        val result = super.match(data)
-        data.skip = previousSkip
-        data.input.removeSave()
+    final override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val previousSkip = attempt.skip
+        attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
+        val result = super.match(attempt)
+        attempt.skip = previousSkip
+        attempt.input.removeSave()
         result
     }
 }
@@ -126,22 +135,22 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
  * A foreign symbol originating from a [NullaryParser].
  */
 public class NullaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>> internal constructor(
-    base: NamedSymbol<out UnnamedT>,
+    named: NamedSymbol<out UnnamedT>,
     override val origin: NullaryParser
-) : ForeignSymbol<UnnamedT>(base)
+) : ForeignSymbol<UnnamedT>(named)
 
 /**
  * A foreign symbol originating from a [UnaryParser].
  */
 public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, in ArgumentT> internal constructor(
-    base: NamedSymbol<out UnnamedT>,
+    named: NamedSymbol<out UnnamedT>,
     override val origin: UnaryParser<ArgumentT>
-) : ForeignSymbol<UnnamedT>(base)
+) : ForeignSymbol<UnnamedT>(named)
 
 /**
  * A symbol representing a symbol that is not a [TypeUnsafeSymbol].
  */
-public sealed class SimpleSymbol<InheritorT : SimpleSymbol<InheritorT>> : NameableSymbol<InheritorT>() {
+public sealed class SimpleSymbol<Self : SimpleSymbol<Self>> : NameableSymbol<Self>() {
     final override fun unwrap() = super.unwrap()
 }
 
@@ -152,8 +161,8 @@ public sealed class SimpleSymbol<InheritorT : SimpleSymbol<InheritorT>> : Nameab
  */
 public sealed class TypeUnsafeSymbol<
     TypeSafeT : TypeSafeSymbol<*, *>,
-    InheritorT : TypeUnsafeSymbol<TypeSafeT, InheritorT>
-> : NameableSymbol<InheritorT>() {
+    Self : TypeUnsafeSymbol<TypeSafeT, Self>
+> : NameableSymbol<Self>() {
     internal val components: MutableList<Symbol> = mutableListOf()
 
     final override fun unwrap() = super.unwrap()
@@ -179,7 +188,7 @@ public class LexerSymbol internal constructor(
     ) : ParserComponent(), LexerComponent {
         override val rawName get() = root.rawName
 
-        internal fun lex(data: ParserMetadata) = root.match(data)?.substring
+        internal fun lex(data: ParsingAttempt) = root.match(data)?.substring
 
         override fun unwrap() = root.unwrap()
     }
@@ -207,12 +216,12 @@ public class LexerSymbol internal constructor(
 
     override fun unwrap() = start.unwrap()
 
-    override fun match(data: ParserMetadata) = matching(data) {
-        val result = start.lex(data)?.let {
-            data.modeStack.apply(behavior.action)
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val result = start.lex(attempt)?.let {
+            attempt.modeStack.apply(behavior.action)
             SyntaxTreeNode(this, it)
         }
-        data.input.removeSave()
+        attempt.input.removeSave()
         result
     }
 
@@ -227,9 +236,9 @@ public class LexerSymbol internal constructor(
 public class Text internal constructor(private val literal: String) : SimpleSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
-    override fun match(data: ParserMetadata) = matching(data) {
-        val input = data.input
-        val matchExists = if (input is CharPivotIterator) {
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val input = attempt.input
+        val matchExists = if (input is CharRevertibleIterator) {
             literal.all { input.hasNext() && it == input.next() }
         } else if (input.isExhausted()) {
             false
@@ -238,7 +247,7 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
         }
         input.revert()
         takeIf { matchExists }?.let {
-            input.advance(if (input is CharPivotIterator) literal.length else 1)
+            input.advance(if (input is CharRevertibleIterator) literal.length else 1)
             SyntaxTreeNode(this, literal)
         }
     }
@@ -253,12 +262,12 @@ public class Switch internal constructor(
     private val literal: String,    // Before optimization
     private val ranges: List<CharRange>
 ) : SimpleSymbol<Switch>() {
-    override fun match(data: ParserMetadata) = matching(data) {
-        val input = data.input
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val input = attempt.input
         var substring = ""
         val matchExists = if (input.isExhausted()) {
             false
-        } else if (input is CharPivotIterator) {
+        } else if (input is CharRevertibleIterator) {
             val next = input.peek()
             substring = next.toString()
             next satisfies ranges
@@ -290,25 +299,25 @@ public class Switch internal constructor(
  * If any one match is of an empty substring, no more matches are attempted.
  */
 public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
-    override fun match(data: ParserMetadata) = matching(data) {
-        val input = data.input
-        var subMatch: SyntaxTreeNode<SubMatchT>? = query.match(data).unsafeCast()
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val input = attempt.input
+        var subMatch: SyntaxTreeNode<SubMatchT>? = query.match(attempt).unsafeCast()
         val subMatches = mutableListOf<SyntaxTreeNode<SubMatchT>>()
-        debug { "Attempting matches to query ${query.rawName}" }
+        debug { "Attempting matches to query: $query" }
         while (subMatch != null) {
             subMatches += subMatch
             if (subMatch.substring.isEmpty()) { // No need to push to fail stack
                 debug { "End matches to query (matched substring is empty)" }
                 break
             }
-            align(data)
-            subMatch = query.match(data).unsafeCast()
+            align(attempt)
+            subMatch = query.match(attempt).unsafeCast()
         }
         debug { "Query matched ${subMatches.size} times" }
         input.revert()
         takeIf { subMatches.isNotEmpty() }?.let {
             val result = RepetitionNode(this, subMatches.concatenate(), subMatches)
-            input.advance(if (input is CharPivotIterator) result.substring.length else result.branches.size)
+            input.advance(if (input is CharRevertibleIterator) result.substring.length else result.branches.size)
             result
         }
     }
@@ -322,11 +331,10 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     private val emptyMatch = OptionNode(this, "", null)
 
-    override fun match(data: ParserMetadata): SyntaxTreeNode<*> { // Fail check & pivoting unnecessary
+    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*> { // Fail check & pivoting unnecessary
         debug { "Matching to query ${query.rawName} or empty match" }
-        data.callStack += this
-        val result = query.match(data)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
-        data.callStack.removeLast()
+        attempt.here().symbols += this
+        val result = query.match(attempt)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
         debugMatchSuccess(result)
         return result
     }
@@ -344,11 +352,11 @@ public class Inversion(
 ) : SimpleSymbol<Inversion>() {
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
-    override fun match(data: ParserMetadata) = matching(data) {
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
         origin.resolveSymbols().values.asSequence()
             .mapNotNull {
-                debug { "Attempting match to query ${it.rawName}" }
-                it.match(data)
+                debug { "Attempting match to query: ${it.rawName}" }
+                it.match(attempt)
             }
             .firstOrNull()
     }
@@ -368,18 +376,18 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         components += option2
     }
 
-    override fun match(data: ParserMetadata) = matching(data) {
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
         val result = components.asSequence()
-            .filter { it !in data.callStack /* prevent infinite recursion */ }
+            .filter { it !in attempt.here().symbols /* prevent infinite recursion */ }
             .map {
-                debug { "Attempting match to query ${it.rawName}" }
-                it.match(data)
+                debug { "Attempting match to query: ${it.rawName}" }
+                it.match(attempt)
             }
             .withIndex()
             .find { it.value != null }
             ?.unsafeCast<IndexedValue<SyntaxTreeNode<*>>>()
             ?.let { JunctionNode(typeSafe, it.value.substring, it.value, it.index) }
-        data.input.removeSave()
+        attempt.input.removeSave()
         result
     }
 
@@ -398,10 +406,10 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         components += query2
     }
 
-    override fun match(data: ParserMetadata) = matching(data) {
-        val input = data.input
+    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+        val input = attempt.input
         val firstQuery = components.first()
-        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in data.callStack) {
+        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
             debug { "Left-recursion found for non-junction query ${firstQuery.rawName}" }
             input.removeSave()
@@ -410,14 +418,14 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         var subMatch: SyntaxTreeNode<*>?
         val subMatches = mutableListOf<SyntaxTreeNode<*>>()
         for (query in components) {
-            subMatch = query.match(data)
+            subMatch = query.match(attempt)
             if (subMatch == null) {
                 input.revert()
                 return@matching null
             }
             subMatches.add(subMatch)
             if (subMatch.substring.isNotEmpty()) {
-                align(data)
+                align(attempt)
             }
         }
         input.removeSave()
@@ -442,9 +450,9 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
  * A symbol matching the end of some input.
  */
 public class End : NameableSymbol<End>() {
-    override fun match(data: ParserMetadata): SyntaxTreeNode<*>? {
+    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debug { "Matching to end of input" }
-        return if (data.input.isExhausted()) {
+        return if (attempt.input.isExhausted()) {
             SyntaxTreeNode(this, "").apply(::debugMatchSuccess)
         } else {
             debugMatchFail()

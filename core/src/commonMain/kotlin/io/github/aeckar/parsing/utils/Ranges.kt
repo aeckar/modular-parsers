@@ -2,6 +2,8 @@ package io.github.aeckar.parsing.utils
 
 import io.github.aeckar.parsing.MalformedParserException
 import io.github.aeckar.parsing.Switch
+import io.github.aeckar.parsing.pivot.CharIterator
+import io.github.aeckar.parsing.pivot.revertibleIterator
 
 /**
  * Returns true if this is in any member of [ranges].
@@ -82,7 +84,7 @@ internal fun MutableList<CharRange>.invertRanges(): List<CharRange> {
     clear()
     // First lower bound is always Char.MIN_VALUE
     // Last upper bound is always Char.MAX_VALUE
-    val ranges = unoptimized.pivotIterator()
+    val ranges = unoptimized.revertibleIterator()
     for (range in ranges) {   // 2. Ensure inverted bounds do not overlap
         if (ranges.hasNext() && range.last > ranges.peek().first) {
             add(range.first..ranges.next().last)    // Consume next range

@@ -337,7 +337,7 @@ public sealed interface NullaryParserDefinition {
 
 internal fun NullaryParserDefinition.resolveListeners(): Map<String, NullarySymbolListener<*>> = when (this) {
     is NullaryLexerlessParserDefinition -> symbolListeners
-    is NullaryLexerParserDefinition -> base.symbolListeners
+    is NullaryLexerParserDefinition -> lexerless.symbolListeners
 }
 
 /**
@@ -381,7 +381,7 @@ internal fun <ArgumentT>
         UnaryParserDefinition<ArgumentT>.resolveListeners(): Map<String, UnarySymbolListener<Symbol, ArgumentT>> =
     when (this) {
         is UnaryLexerlessParserDefinition<*> -> symbolListeners.unsafeCast()
-        is UnaryLexerParserDefinition<*> -> base.symbolListeners.unsafeCast()
+        is UnaryLexerParserDefinition<*> -> lexerless.symbolListeners.unsafeCast()
     }
 
 // ------------------------------------ lexerless parser definitions ------------------------------------
@@ -845,8 +845,8 @@ public sealed class LexerParserDefinition : ParserDefinition() {
  * Defines a scope where a [NameableLexerParser] that does not take an argument can be defined.
  */
 public class NullaryLexerParserDefinition private constructor(
-    internal val base: NullaryLexerlessParserDefinition
-) : LexerParserDefinition(), NullaryParserDefinition by base {
+    internal val lexerless: NullaryLexerlessParserDefinition
+) : LexerParserDefinition(), NullaryParserDefinition by lexerless {
     internal constructor() : this(NullaryLexerlessParserDefinition())
 }
 
@@ -854,7 +854,7 @@ public class NullaryLexerParserDefinition private constructor(
  * Defines a scope where a [NameableLexerParser] that takes one argument can be defined.
  */
 public class UnaryLexerParserDefinition<in ArgumentT> private constructor(
-    internal val base: UnaryLexerlessParserDefinition<@UnsafeVariance ArgumentT>
-) : LexerParserDefinition(), UnaryParserDefinition<@UnsafeVariance ArgumentT> by base {
+    internal val lexerless: UnaryLexerlessParserDefinition<@UnsafeVariance ArgumentT>
+) : LexerParserDefinition(), UnaryParserDefinition<@UnsafeVariance ArgumentT> by lexerless {
     internal constructor() : this(UnaryLexerlessParserDefinition())
 }
