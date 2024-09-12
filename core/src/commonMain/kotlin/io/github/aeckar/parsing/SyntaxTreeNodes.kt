@@ -3,7 +3,7 @@ package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.typesafe.JunctionNode
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
-import io.github.aeckar.parsing.utils.TreeNode
+import io.github.aeckar.parsing.primitives.TreeNode
 import io.github.aeckar.parsing.utils.fragileUnsafeCast
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.jvm.JvmName

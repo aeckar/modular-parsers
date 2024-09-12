@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.pivot
+package io.github.aeckar.parsing.primitives
 
 /**
  * A revertible iterator over a sequence of elements, each of which is assigned some object.

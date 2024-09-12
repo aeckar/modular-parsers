@@ -1,4 +1,6 @@
-package io.github.aeckar.parsing.utils
+package io.github.aeckar.parsing.primitives
+
+import io.github.aeckar.parsing.utils.unsafeCast
 
 /**
  * An element in a linked list.

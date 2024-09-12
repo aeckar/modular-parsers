@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.pivot
+package io.github.aeckar.parsing.primitives
 
 /**
  * A sequence of characters providing unboxed access to each element.

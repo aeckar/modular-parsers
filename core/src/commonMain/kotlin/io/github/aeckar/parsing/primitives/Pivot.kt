@@ -1,11 +1,9 @@
-package io.github.aeckar.parsing.pivot
-
-import io.github.aeckar.parsing.utils.ListNode
+package io.github.aeckar.parsing.primitives
 
 /**
- * Some
- * @param position an object representing the absolute position of this node
- * @param value a value specific to this node
+ * An object containing a position and a value.
+ * @param position the location of this in some larger object
+ * @param value a value specific to the location of this
  */
 public data class Pivot<H, P : Comparable<P>>(
     public val position: P,
@@ -13,7 +11,7 @@ public data class Pivot<H, P : Comparable<P>>(
 ) : ListNode<Pivot<H, P>>()
 
 /**
- * Returns the node in this linked list whose position has a total ordering equal to [location].
+ * Returns the pivot whose position has a total ordering equal to [location].
  *
  * If one does not exist, it is inserted according to the ordering of [P].
  * If the receiver is null, the result of [init] is returned.

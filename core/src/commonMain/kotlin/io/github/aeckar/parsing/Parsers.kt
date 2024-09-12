@@ -1,7 +1,9 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.pivot.CharRevertibleIterator
-import io.github.aeckar.parsing.pivot.revertibleIterator
+import io.github.aeckar.parsing.primitives.CharPivotIterator
+import io.github.aeckar.parsing.primitives.CharRevertibleIterator
+import io.github.aeckar.parsing.primitives.pivotIterator
+import io.github.aeckar.parsing.primitives.revertibleIterator
 import io.github.aeckar.parsing.utils.*
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
@@ -328,7 +330,7 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
     final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.revertibleIterator()))
 
     final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.revertibleIterator(), null))
+        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.pivotIterator(::MatchAttempt), null))
     }
 
     // Defensive copy
@@ -337,7 +339,7 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
 
     final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
-    private fun tokenize(input: CharRevertibleIterator): List<Token> {
+    private fun tokenize(input: CharPivotIterator<MatchAttempt, *>): List<Token> {
         val metadata = ParsingAttempt(input, null)
         val tokens = mutableListOf<Token>()
         var inRecovery = false

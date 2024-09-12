@@ -1,7 +1,7 @@
 package io.github.aeckar.parsing
 
 import io.github.aeckar.parsing.ParsingAttempt.Pivot
-import io.github.aeckar.parsing.pivot.CharRevertibleIterator
+import io.github.aeckar.parsing.primitives.CharRevertibleIterator
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 

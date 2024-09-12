@@ -1,7 +1,5 @@
-package io.github.aeckar.parsing.pivot
+package io.github.aeckar.parsing.primitives
 
-import io.github.aeckar.parsing.utils.IntStack
-import io.github.aeckar.parsing.utils.withEscapes
 import kotlinx.io.Buffer
 import kotlinx.io.RawSource
 import kotlinx.io.readString
@@ -50,7 +48,7 @@ public interface RevertibleIterator<out E, out P> : Iterator<E> {
     public fun isExhausted(): Boolean = !hasNext()
 
     /**
-     * Returns an object representing the absolute position of this iterator.
+     * Returns an object representing the current position of this iterator.
      */
     public fun position(): P
 }
@@ -126,24 +124,24 @@ internal class StringRevertibleIterator(
 internal class SourceRevertibleIterator(private val source: RawSource) : CharRevertibleIterator<SourcePosition> {
     private val buffer = mutableListOf<String>()
     private val savedPositions = mutableListOf<SourcePosition>()
-    private var bufferSection = ""
+    private var section = 0
     private var sectionPosition = 0
 
-    override fun position() = SourcePosition(bufferSection, sectionPosition)
+    override fun position() = SourcePosition(section, sectionPosition)
 
     override fun advance(places: Int) {
         sectionPosition += places
     }
 
     override fun save() {
-        verifyBufferAndPosition()
+        verifySection()
         savedPositions += position()
     }
 
     override fun revert() {
         savedPositions.removeLast().let { (section, position) ->
-            bufferSection = section
-            sectionPosition = position
+            this.section = section
+            this.sectionPosition = position
         }
     }
 
@@ -151,37 +149,40 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         savedPositions.removeLast()
     }
 
-    override fun hasNext() = sectionPosition < bufferSection.length || loadNextSection()
+    override fun hasNext() = sectionPosition < buffer[section].length || loadSection()
     override fun nextChar() = peek().also { ++sectionPosition }
 
     override fun peekChar(): Char {
-        verifyBufferAndPosition()
-        return bufferSection[sectionPosition]
+        verifySection()
+        return buffer[section][sectionPosition]
     }
 
     override fun toString() = buildString {
-        val section = bufferSection.withEscapes()
-            .asIterable()
-            .joinToString(separator = "", prefix = "'", postfix = "'", limit = 20)
+//        val section = bufferSection.withEscapes()
+//            .asIterable()
+//            .joinToString(separator = "", prefix = "'", postfix = "'", limit = 20)
         append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
-        append(" (section = $section, position = $sectionPosition)")
+        append(" (absolute position = ${absolutePosition()})")
     }
 
-    private fun verifyBufferAndPosition() {
-        while (sectionPosition >= bufferSection.length) {
-            if (!loadNextSection()) {
+    private fun verifySection() {
+        while (sectionPosition >= buffer[section].length) {
+            sectionPosition -= buffer[section].length
+            if (!loadSection()) {
                 throw NoSuchElementException(
-                    "Underlying source is exhausted (section = $bufferSection, position = $sectionPosition)")
+                    "Underlying source is exhausted (absolute position = ${absolutePosition()})")
             }
-            sectionPosition -= bufferSection.length
-            bufferSection = buffer.last()
+            ++section
         }
     }
 
     /**
      * Returns true if the next section exists, or false if this input stream has been exhausted.
      */
-    private fun loadNextSection(): Boolean {
+    private fun loadSection(): Boolean {
+        if (section < buffer.lastIndex) {
+            return true
+        }
         val nextSection = Buffer().apply { source.readAtMostTo(this, 8192L) }.readString()
             // Throws IllegalStateException when source is closed
         if (nextSection.isEmpty()) {
@@ -189,5 +190,12 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         }
         buffer += nextSection
         return true
+    }
+
+    private fun absolutePosition(): Int {
+        if (section == 0) {
+            return sectionPosition
+        }
+        return buffer.asSequence().take(section - 1).sumOf { it.length } + sectionPosition
     }
 }
