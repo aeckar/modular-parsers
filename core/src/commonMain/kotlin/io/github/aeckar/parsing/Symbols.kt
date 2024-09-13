@@ -4,7 +4,9 @@ import io.github.aeckar.parsing.containers.CharRevertibleIterator
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 
-private inline fun <reified T> Symbol.parenthesizeIf() = if (this is T) "($this)" else toString()
+private inline fun Symbol.parenthesizeIf(predicate: (Symbol) -> Boolean): String {
+    return if (predicate(this)) "($this)" else toString()
+}
 
 /**
  * Returns the concatenation of the substrings of all elements in this list.
@@ -18,7 +20,42 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
  *
  * The building block of a parser rule.
  */
-public abstract class Symbol internal constructor() : ParserComponent() {
+public abstract class Symbol internal constructor(
+) : ParserComponent() { // Unseal to allow inheritance from type-safe symbols
+    protected fun debugUnwrap(wrapped: Symbol) {
+        debug { "Unwrapping symbol: ${wrapped.toString().blue()}" }
+    }
+
+    protected fun debugRewrap() {
+        debug { "Rewrap" }
+    }
+
+    protected fun debugQuery(query: Symbol) {
+        debug { "Attempting match to query: ${query.toString().blue()}" }
+    }
+
+    protected fun debugMatchSuccess(result: SyntaxTreeNode<*>) {
+        debug {
+            "Match succeeded".greenEmphasis() +
+            " (substring = '" + result.substring.withEscapes().yellow() + "')"
+        }
+    }
+
+    protected fun debugMatchSuccess(result: SyntaxTreeNode<*>, lazyReason: () -> String) {
+        debug {
+            "Match succeeded".greenEmphasis() +
+            " (${lazyReason()}, substring = '" + result.substring.withEscapes().yellow() + "')"
+        }
+    }
+
+    protected fun debugMatchFail() {
+        debug { "Match failed".redEmphasis() }
+    }
+
+    protected fun debugMatchFail(lazyReason: () -> String ) {
+        debug { "Match failed".redEmphasis() + " (${lazyReason()})" }
+    }
+
     /**
      * Returns null if this symbol is in the top of the fail stack, and logs the failure.
      * Otherwise, performs the following:
@@ -59,12 +96,12 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
      */
     internal fun align(attempt: ParsingAttempt) {
         attempt.skip?.let {
-            debug { "Attempting match to skip ${attempt.skip}" }
+            debug { "Attempting match to skip: ".magentaEmphasis() + attempt.skip.toString().blue() }
             val previousSkip = attempt.skip
             attempt.skip = null // Prevent infinite recursion
             it.match(attempt)
             attempt.skip = previousSkip
-            debug { "End skip" }
+            debug { "End skip".magentaEmphasis() }
         }
     }
 
@@ -96,7 +133,7 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
         return result
     }
 
-    override fun toString(): String = lazyString
+    final override fun toString(): String = lazyString
 }
 
 /**
@@ -110,14 +147,17 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
     final override fun unwrap() = unnamed
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        return unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
+        debugUnwrap(unnamed)
+        val result = unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
+        debugRewrap()
+        return result
     }
 
     final override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         return match(attempt)
     }
 
-    override fun toString(): String = name
+    final override fun toString(): String = name
 }
 
 /**
@@ -129,10 +169,12 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
     internal abstract val origin: Parser
 
     final override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        debugUnwrap(unnamed)
         val previousSkip = attempt.skip
         attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
         val result = unnamed.match(attempt)
         attempt.skip = previousSkip
+        debugRewrap()
         return result
     }
 }
@@ -156,9 +198,7 @@ public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, in Argum
 /**
  * A symbol representing a symbol that is not a [TypeUnsafeSymbol].
  */
-public sealed class SimpleSymbol<Self : SimpleSymbol<Self>> : NameableSymbol<Self>() {
-    final override fun unwrap() = super.unwrap()
-}
+public sealed class SimpleSymbol<Self : SimpleSymbol<Self>> : NameableSymbol<Self>()
 
 /**
  * A symbol comprised of more than one other symbol.
@@ -195,7 +235,6 @@ public class LexerSymbol internal constructor(
         internal fun lex(data: ParsingAttempt) = root.match(data)?.substring
 
         override fun unwrap() = root.unwrap()
-
         override fun toString(): String = root.toString()
     }
 
@@ -220,15 +259,17 @@ public class LexerSymbol internal constructor(
         }
     }
 
-    override fun unwrap() = start.unwrap()
-
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        return start.lex(attempt)?.let {
+        debugUnwrap(start.root)
+        val result = start.lex(attempt)?.let {
             attempt.modeStack.apply(behavior.action)
             SyntaxTreeNode(this, it)
         }
+        debugRewrap()
+        return result
     }
 
+    override fun unwrap() = start.unwrap()
     override fun resolveString() = start.toString()
 }
 
@@ -329,7 +370,7 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         return result
     }
 
-    override fun resolveString() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "+"
+    override fun resolveString() = query.parenthesizeIf { it is TypeSafeSymbol<*, *> } + "+"
 }
 
 /**
@@ -342,7 +383,7 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
         return query.match(attempt)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
     }
 
-    override fun resolveString() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
+    override fun resolveString() = query.parenthesizeIf { it is TypeSafeSymbol<*, *> } + "?"
 }
 
 /**
@@ -359,13 +400,13 @@ public class Inversion(
         return origin.resolveSymbols().values
             .asSequence()
             .mapNotNull {
-                debug { "Attempting match to query: $it" }
+                debugQuery(it)
                 it.match(attempt)
             }
             .firstOrNull()
     }
 
-    override fun resolveString() = "!$exclusion"
+    override fun resolveString() = "!${exclusion.parenthesizeIf { it !is SimpleSymbol<*> }}"
 }
 
 /**
@@ -385,7 +426,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         val result = components.asSequence()
             .filter { it !in startPos.symbols /* prevent infinite recursion */ }
             .map {
-                debug { "Attempting match to query: $it" }
+                debugQuery(it)
                 it.match(attempt)
             }
             .withIndex()
@@ -437,7 +478,9 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         return SequenceNode(typeSafe, subMatches.concatenate(), subMatches)
     }
 
-    override fun resolveString() = components.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
+    override fun resolveString() = components.joinToString(" ") { component ->
+        component.parenthesizeIf { it is TypeSafeJunction<*> }
+    }
 
     public companion object {
         /**
@@ -454,7 +497,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
 /**
  * A symbol matching the end of some input.
  */
-public class End : NameableSymbol<End>() {  // Doesn't make sense to cache this
+public class End : SimpleSymbol<End>() {  // Doesn't make sense to cache this
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debug { "Matching to end of input" }
         return if (attempt.input.isExhausted()) {

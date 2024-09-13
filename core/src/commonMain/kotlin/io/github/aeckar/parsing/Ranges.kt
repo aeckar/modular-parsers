@@ -1,13 +1,11 @@
-package io.github.aeckar.parsing.utils
+package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.MalformedParserException
-import io.github.aeckar.parsing.Switch
 import io.github.aeckar.parsing.containers.revertibleIterator
 
 /**
  * Returns true if this is in any member of [ranges].
  */
-public infix fun Char.satisfies(ranges: List<CharRange>): Boolean = ranges.any { this in it }
+internal infix fun Char.satisfies(ranges: List<CharRange>) = ranges.any { this in it }
 
 /**
  * Returns a list of character ranges that can used by [Switch] symbols.

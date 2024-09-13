@@ -5,8 +5,7 @@ import io.github.aeckar.parsing.LexerSymbol.Descriptor
 import io.github.aeckar.parsing.LexerSymbol.Fragment
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
-import io.github.aeckar.parsing.utils.toRanges
-import io.github.aeckar.parsing.utils.unsafeCast
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -611,10 +610,10 @@ public sealed class LexerParserDefinition : ParserDefinition() {
     /**
      * Signals that all lexer symbols defined hereafter and before the next mode
      * should be used exclusively when in the specified lexer mode.
-     * @throws MalformedParserException [name] is invalid according to [isKotlinIdentifier]
+     * @throws MalformedParserException [name] is invalid according to [isValidModeName]
      */
     public fun mode(name: String) {
-        if (!name.isKotlinIdentifier()) {
+        if (!name.isValidModeName()) {
             throw MalformedParserException("'$name' is an invalid lexer mode name")
         }
         mode = name
@@ -838,6 +837,29 @@ public sealed class LexerParserDefinition : ParserDefinition() {
             return this
         }
         return Fragment(TypeUnsafeSequence(Text(query2), root))
+    }
+
+    private companion object {
+        /**
+         * A list of character ranges that a character must satisfy to be
+         * the first character in a [Kotlin identifier][isValidModeName].
+         */
+        val modeNameStart: List<CharRange> = "a-zA-Z_".toRanges().toImmutableList()
+
+        /**
+         * A list of character ranges that a character must satisfy to be
+         * any character besides the first one in a [Kotlin identifier][isValidModeName].
+         */
+        val modeNamePart: List<CharRange> = "a-ZA-Z0-9_".toRanges().toImmutableList()
+
+        /**
+         * Returns true if this contains only a valid Kotlin identifier.
+         */
+        fun String.isValidModeName(): Boolean {
+            return this.isNotEmpty()
+                    && this[0] satisfies modeNameStart
+                    && takeLast(length - 1).all { it satisfies modeNamePart }
+        }
     }
 }
 

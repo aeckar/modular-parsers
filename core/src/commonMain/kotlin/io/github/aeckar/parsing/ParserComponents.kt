@@ -25,4 +25,7 @@ public sealed class ParserComponent {   // Abstract class allows internal member
      * Returns the name assigned to this symbol if it exists, else its EBNF representation.
      */
     abstract override fun toString(): String
+
+    final override fun equals(other: Any?): Boolean = super.equals(other)
+    final override fun hashCode(): Int = super.hashCode()
 }

@@ -1,5 +1,6 @@
-package io.github.aeckar.parsing.utils
+package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
