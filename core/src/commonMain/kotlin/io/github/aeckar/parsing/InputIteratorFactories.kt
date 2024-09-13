@@ -1,20 +1,20 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.primitives.PivotIterator
-import io.github.aeckar.parsing.primitives.pivotIterator
+import io.github.aeckar.parsing.containers.PivotIterator
+import io.github.aeckar.parsing.containers.pivotIterator
 import kotlinx.io.RawSource
 
-internal typealias MatchIterator<E, P> = PivotIterator<E, MatchAttempt, P>
+internal typealias InputIterator<E, P> = PivotIterator<E, P, InputPosition>
 
 /**
  * Returns an iterator pivoting over the elements in the list.
  */
-internal fun <E> List<E>.matchIterator(): MatchIterator<E, Int> = pivotIterator(::MatchAttempt)
+internal fun <E> List<E>.inputIterator(): InputIterator<E, Int> = pivotIterator(::InputPosition)
 
 /**
  * Returns an iterator pivoting over the characters in this string.
  */
-internal fun String.matchIterator(): MatchIterator<Char, Int> = pivotIterator(::MatchAttempt)
+internal fun String.inputIterator(): InputIterator<Char, Int> = pivotIterator(::InputPosition)
 
 /**
  * Returns an iterator pivoting over the characters loaded from this source.
@@ -23,4 +23,4 @@ internal fun String.matchIterator(): MatchIterator<Char, Int> = pivotIterator(::
  * If this is [closed][RawSource.close],
  * any function called from the returned instance throws an [IllegalStateException].
  */
-internal fun RawSource.matchIterator(): MatchIterator<Char, *> = pivotIterator(::MatchAttempt)
+internal fun RawSource.inputIterator(): InputIterator<Char, *> = pivotIterator(::InputPosition)

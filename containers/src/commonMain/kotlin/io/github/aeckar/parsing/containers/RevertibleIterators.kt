@@ -1,8 +1,10 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 import kotlinx.io.Buffer
 import kotlinx.io.RawSource
 import kotlinx.io.readString
+
+private const val SECTION_SIZE = 8192L
 
 /**
  * A sequence of elements whose position can be saved and reverted to later.
@@ -51,6 +53,11 @@ public interface RevertibleIterator<out E, out P> : Iterator<E> {
      * Returns an object representing the current position of this iterator.
      */
     public fun position(): P
+
+    /**
+     * Returns true if [other] is a revertible iterator over the same instance at the same position as this one.
+     */
+    override fun equals(other: Any?): Boolean
 }
 
 /**
@@ -69,6 +76,8 @@ public interface CharRevertibleIterator<out P> : RevertibleIterator<Char, P>, Ch
  * A revertible iterator over an indexable sequence of elements.
  */
 internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, Int> {
+    protected abstract val elements: Any?
+
     /**
      * The index of the element being pointed to by the iterator.
      */
@@ -93,9 +102,25 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
     }
 
     final override fun position() = position
+
+    final override fun equals(other: Any?): Boolean {
+        if (other === this) {
+            return true
+        }
+        if (other !is IndexRevertibleIterator<*>) {
+            return false
+        }
+        return elements === other.elements && position == other.position
+    }
+
+    final override fun hashCode(): Int {
+        var result = elements.hashCode()
+        result = 31 * result + position
+        return result
+    }
 }
 
-internal class ListRevertibleIterator<out E>(private val elements: List<E>) : IndexRevertibleIterator<E>() {
+internal class ListRevertibleIterator<out E>(override val elements: List<E>) : IndexRevertibleIterator<E>() {
     override fun hasNext() = position < elements.size
     override fun isExhausted() = position >= elements.size
     override fun next(): E = peek().also { ++position }
@@ -108,12 +133,12 @@ internal class ListRevertibleIterator<out E>(private val elements: List<E>) : In
 }
 
 internal class StringRevertibleIterator(
-    private val chars: String
+    override val elements: String
 ) : IndexRevertibleIterator<Char>(), CharRevertibleIterator<Int> {
-    override fun hasNext() = position < chars.length
-    override fun isExhausted() = position >= chars.length
+    override fun hasNext() = position < elements.length
+    override fun isExhausted() = position >= elements.length
     override fun nextChar() = peek().also { ++position }
-    override fun peekChar() = chars[position]
+    override fun peekChar() = elements[position]
 
     override fun toString() = buildString {
         append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
@@ -122,7 +147,7 @@ internal class StringRevertibleIterator(
 }
 
 internal class SourceRevertibleIterator(private val source: RawSource) : CharRevertibleIterator<SourcePosition> {
-    private val buffer = mutableListOf<String>()
+    private val buffer = mutableListOf("")  // Allows initial hasNext()
     private val savedPositions = mutableListOf<SourcePosition>()
     private var section = 0
     private var sectionPosition = 0
@@ -165,6 +190,23 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         append(" (absolute position = ${absolutePosition()})")
     }
 
+    override fun equals(other: Any?): Boolean {
+        if (other === this) {
+            return true
+        }
+        if (other !is SourceRevertibleIterator) {
+            return false
+        }
+        return source === other.source && section == other.section && sectionPosition == other.sectionPosition
+    }
+
+    override fun hashCode(): Int {
+        var result = source.hashCode()
+        result = 31 * result + section
+        result = 31 * result + sectionPosition
+        return result
+    }
+
     private fun verifySection() {
         while (sectionPosition >= buffer[section].length) {
             sectionPosition -= buffer[section].length
@@ -183,7 +225,7 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         if (section < buffer.lastIndex) {
             return true
         }
-        val nextSection = Buffer().apply { source.readAtMostTo(this, 8192L) }.readString()
+        val nextSection = Buffer().apply { source.readAtMostTo(this, SECTION_SIZE) }.readString()
             // Throws IllegalStateException when source is closed
         if (nextSection.isEmpty()) {
             return false

@@ -6,6 +6,8 @@ import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
 import kotlin.jvm.JvmName
 
+// TODO Go back to using symbols wrapped in named-symbol directly
+
 /**
  * Creates a new [NameableLexerlessParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined

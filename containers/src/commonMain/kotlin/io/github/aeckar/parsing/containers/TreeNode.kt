@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.PersistentList
@@ -22,6 +22,7 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
     public fun treeString(lines: Style = UTF_8): String {
         val builder = StringBuilder()
         appendSubtree(builder, lines, layers = BooleanStack())
+        builder.deleteAt(builder.lastIndex) // Remove trailing newline
         return builder.toString()
     }
 
@@ -74,10 +75,9 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
      * The first node returned is the bottom-left-most and the last node returned is this one.
      */
     final override fun iterator(): Iterator<Self> = @Suppress("UNCHECKED_CAST") object : Iterator<Self> {
-        private var cursor: Self = this@TreeNode as Self
+        private var cursor = this@TreeNode as Self
         private val parentStack = mutableListOf<Self>()
         private val childIndices = IntStack()
-        private var firstIteration = true
 
         init {
             childIndices += 0   // Prevent underflow in loop condition
@@ -91,10 +91,6 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
         override fun hasNext() = cursor !== this@TreeNode
 
         override fun next(): Self {
-            if (firstIteration) {
-                firstIteration = false
-                return cursor
-            }
             cursor = parentStack.removeLast()
             childIndices.removeLast()
             while (childIndices.last() <= cursor.children.lastIndex) {

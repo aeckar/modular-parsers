@@ -19,6 +19,7 @@ public abstract class TypeSafeSymbol<
         return typeUnsafe.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
     }
 
+    final override fun matchNoCache(attempt: ParsingAttempt) = match(attempt)
     final override fun resolveRawName() = typeUnsafe.rawName
 }
 

@@ -24,19 +24,10 @@ public sealed class ParserComponent {
      *
      * Symbol wrappers include [TypeSafeSymbol] and [NamedSymbol].
      */
-    internal open fun unwrap(): Symbol = this as Symbol
+    internal abstract fun unwrap(): Symbol
 
     /**
      * Returns the name assigned to this symbol if it exists, else its EBNF representation.
      */
     final override fun toString(): String = rawName
-
-    final override fun equals(other: Any?): Boolean {
-        if (this === other) {
-            return true
-        }
-        return rawName == (other as? ParserComponent)?.rawName
-    }
-
-    final override fun hashCode(): Int = rawName.hashCode()
 }

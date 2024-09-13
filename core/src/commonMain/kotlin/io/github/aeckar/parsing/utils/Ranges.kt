@@ -2,7 +2,7 @@ package io.github.aeckar.parsing.utils
 
 import io.github.aeckar.parsing.MalformedParserException
 import io.github.aeckar.parsing.Switch
-import io.github.aeckar.parsing.primitives.revertibleIterator
+import io.github.aeckar.parsing.containers.revertibleIterator
 
 /**
  * Returns true if this is in any member of [ranges].

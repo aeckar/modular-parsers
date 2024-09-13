@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 import kotlin.jvm.JvmInline
 
@@ -46,6 +46,7 @@ public class IntStack private constructor(
 
     /**
      * Returns the top of the stack.
+     * @throws NoSuchElementException stack is empty
      */
     public fun last(): Int {
         ensureNotEmpty()
@@ -62,6 +63,7 @@ public class IntStack private constructor(
 
     /**
      * Pops the top element from the stack and returns its value.
+     * @throws NoSuchElementException stack is empty
      */
     public fun removeLast(): Int = last().also { --size }
 

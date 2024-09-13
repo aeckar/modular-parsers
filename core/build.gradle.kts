@@ -43,7 +43,7 @@ kotlin {
         commonMain {
             kotlin.srcDirs("build/generated/sources/commonMain/kotlin")
             dependencies {
-                implementation(project(":primitives"))
+                implementation(project(":containers"))
                 implementation(libs.kotlinx.io)
                 implementation(libs.kotlin.logging)
                 implementation(libs.kotlinx.collections.immutable)
@@ -53,6 +53,7 @@ kotlin {
             dependencies {
                 implementation(libs.kotlin.test)
                 runtimeOnly(libs.kotlin.logging.jvm)
+                runtimeOnly(libs.logback.classic)
             }
         }
     }
@@ -82,7 +83,7 @@ tasks.register("generateTypeSafe") {
 
     val resourcesPath = "${projectDir}/src/commonMain/resources"
     val typeSafePackage = "io/github/aeckar/parsing/typesafe"
-    val typeSafeTemplatePath = "$typeSafePackage/TypeSafeDeclarations.kt.vm"
+    val typeSafeTemplatePath = "/TypeSafeDeclarations.kt.vm"
 
     inputs.file("$resourcesPath/$typeSafeTemplatePath")
 

@@ -1,9 +1,9 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 /**
  * A revertible iterator over a sequence of elements, each of which is assigned some object.
  */
-public interface PivotIterator<out E, out H, out P> : RevertibleIterator<E, P> {
+public interface PivotIterator<out E, out P, out H> : RevertibleIterator<E, P> {
     /**
      * Returns the object assigned to the current element.
      */
@@ -13,15 +13,15 @@ public interface PivotIterator<out E, out H, out P> : RevertibleIterator<E, P> {
 /**getNode
  * An iterator pivoting over a sequence of characters.
  */
-public interface CharPivotIterator<out H, out P> : PivotIterator<Char, H, P>, CharRevertibleIterator<P>
+public interface CharPivotIterator<out P, out H> : PivotIterator<Char, P, H>, CharRevertibleIterator<P>
 
 /**
  * An iterator pivoting over a sequence of indexable elements.
  */
-internal abstract class AbstractPivotIterator<out E, out H, P : Comparable<P>> internal constructor(
+internal abstract class AbstractPivotIterator<out E, P : Comparable<P>, out H> internal constructor(
     private val revertible: RevertibleIterator<E, P>,
     private val init: () -> H
-) : PivotIterator<E, H, P>, RevertibleIterator<E, P> {
+) : PivotIterator<E, P, H>, RevertibleIterator<E, P> {
     private var cursor: Pivot<H, P>? = null
 
     final override fun here(): H {

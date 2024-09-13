@@ -191,12 +191,12 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
         debug { "Defined with parser symbols $parserSymbols" }
     }
 
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.matchIterator())
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.matchIterator())
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.inputIterator())
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.inputIterator())
 
     final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
 
-    private fun parse(input: MatchIterator<*, *>): SyntaxTreeNode<*>? {
+    private fun parse(input: InputIterator<*, *>): SyntaxTreeNode<*>? {
         return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input, skip))
     }
 }
@@ -226,7 +226,7 @@ public class NamedNullaryLexerlessParser internal constructor(
     internal val unnamed: NullaryLexerlessParser
 ) : NamedNullaryParser, NullaryParser by unnamed, LexerlessParser {
     init {
-        debug { "Named ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
@@ -260,7 +260,7 @@ public class NamedUnaryLexerlessParser<in ArgumentT> internal constructor(
     internal val unnamed: UnaryLexerlessParser<ArgumentT>
 ) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, LexerlessParser {
     init {
-        debug { "Named ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
@@ -322,20 +322,20 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
         }
     }
 
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.matchIterator()))
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.matchIterator()))
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
 
     final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.matchIterator(), null))
+        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.inputIterator(), null))
     }
 
     // Defensive copy
-    final override fun tokenize(input: String): List<Token> = tokenize(input.matchIterator()).toList()
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.matchIterator()).toList()
+    final override fun tokenize(input: String): List<Token> = tokenize(input.inputIterator()).toList()
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.inputIterator()).toList()
 
     final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
 
-    private fun tokenize(input: MatchIterator<*, *>): List<Token> {
+    private fun tokenize(input: InputIterator<*, *>): List<Token> {
         val metadata = ParsingAttempt(input, null)
         val tokens = mutableListOf<Token>()
         var inRecovery = false
@@ -392,7 +392,7 @@ public class NamedNullaryLexerParser internal constructor(
     override val listeners: Map<String, NullarySymbolListener<*>> get() = unnamed.listeners
 
     init {
-        debug { "Named ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name
@@ -428,7 +428,7 @@ public class NamedUnaryLexerParser<in ArgumentT> internal constructor(
     override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> get() = unnamed.listeners
 
     init {
-        debug { "Named ${unnamed.id.toString(radix = 16)}" }
+        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
     }
 
     override fun toString(): String = name

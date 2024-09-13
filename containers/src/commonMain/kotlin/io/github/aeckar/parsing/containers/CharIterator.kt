@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 /**
  * A sequence of characters providing unboxed access to each element.

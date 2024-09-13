@@ -18,6 +18,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "modular-parsers"
 
+include(":containers")
 include(":core")
 include(":antlr4-interop")
-include("primitives")

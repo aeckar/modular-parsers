@@ -1,7 +1,6 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.ParsingAttempt.Pivot
-import io.github.aeckar.parsing.primitives.CharRevertibleIterator
+import io.github.aeckar.parsing.containers.CharRevertibleIterator
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 
@@ -27,41 +26,23 @@ public abstract class Symbol internal constructor() : ParserComponent() {
      * 2. Logs whether the symbol was matched or not
      * 3. Appends this symbol to the top of the fail stack if not matched
      * 4. Returns the result
+     *
+     * Either this function, or [matchNoCache] must be overriden, but not both.
      */
-    internal inline fun <MatchT : SyntaxTreeNode<*>?> matching(
-        attempt: ParsingAttempt,
-        crossinline block: () -> MatchT
-    ) = with(attempt) {
-        val symbol = this@Symbol
-        if (symbol in here().fails) {
-            symbol.debugMatchFail { "Previous match attempt failed" }
-            return@with null
-        }
-        here().successes[symbol]?.let {
-            symbol.debugMatchSuccess(it)
-            return@with it
-        }
-        symbol.debug { "Attempting match" }
-        here().symbols += symbol // Including symbol wrappers
-        input.save()
-        val result = block()
-        if (result != null) {
-            symbol.debugMatchSuccess(result)
-            here().successes[symbol] = result
-            if (result.substring.isNotEmpty()) {
-                pivotStack += Pivot()
-            }
-        } else {
-            symbol.debugMatchFail()
-            here().fails += symbol
-        }
-        result
-    }
+    internal abstract fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>?
+
+    /**
+     * Attempts to match this symbol to the current position in the input without performing caching.
+     *
+     * Invoked by the default implementation of [match], which handles fail/success caching.
+     * @throws UnsupportedOperationException this is a [NamedSymbol] or [End] symbol
+     */
+    internal abstract fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>?
 
     /**
      * Performs the following:
      * 1. Consumes the next substring matching the skip symbol, if not null
-     * 2. Pushes an empty list to the [fail stack][ParsingAttempt.Pivot.fails]
+     * 2. Pushes an empty list to the [fail stack][InputPosition.fails]
      */
     internal fun align(attempt: ParsingAttempt) {
         attempt.skip?.let {
@@ -73,8 +54,6 @@ public abstract class Symbol internal constructor() : ParserComponent() {
             debug { "End skip" }
         }
     }
-
-    internal abstract fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>?
 }
 
 /**
@@ -93,6 +72,32 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
      * The returned name is not enclosed in parentheses.
      */
     internal abstract fun resolveRawName(): String
+
+    override fun unwrap() = this as Symbol
+
+    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        val startPos = attempt.input.here()
+        if (this in startPos.fails) {
+            debugMatchFail { "Previous match attempt failed" }
+            return null
+        }
+        startPos.successes[this]?.let {
+            debugMatchSuccess(it) { "Previous match attempt succeeded" }
+            return it.unsafeCast()
+        }
+        debug { "Attempting match" }
+        startPos.symbols += this
+        attempt.input.save()
+        val result = matchNoCache(attempt)
+        if (result != null) {
+            debugMatchSuccess(result)
+            attempt.input.here().successes[this] = result // 'here' is at a different position
+        } else {
+            debugMatchFail()
+            attempt.input.here().fails += this
+        }
+        return result
+    }
 }
 
 /**
@@ -106,10 +111,12 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 
     final override fun unwrap() = unnamed
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
-        val result = unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
-        attempt.input.removeSave()
-        result
+    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        return unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
+    }
+
+    final override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        return match(attempt)
     }
 }
 
@@ -121,13 +128,12 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
 ) : NamedSymbol<UnnamedT>(named.name, named.unnamed) {
     internal abstract val origin: Parser
 
-    final override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    final override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val previousSkip = attempt.skip
         attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
-        val result = super.match(attempt)
+        val result = unnamed.match(attempt)
         attempt.skip = previousSkip
-        attempt.input.removeSave()
-        result
+        return result
     }
 }
 
@@ -178,7 +184,7 @@ public sealed class TypeUnsafeSymbol<
  */
 public class LexerSymbol internal constructor(
     private val start: Fragment,
-    private val behavior: Behavior = Behavior.NOTHING
+    private val behavior: Behavior = Behavior.DO_NOTHING
 ) : NameableSymbol<LexerSymbol>(), LexerComponent {
     /**
      * Can be combined with other fragments to create a named [LexerSymbol].
@@ -210,19 +216,17 @@ public class LexerSymbol internal constructor(
         internal val action: MutableList<String>.() -> Unit
     ) {
         internal companion object {
-            val NOTHING = Behavior {}
+            val DO_NOTHING = Behavior {}
         }
     }
 
     override fun unwrap() = start.unwrap()
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
-        val result = start.lex(attempt)?.let {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        return start.lex(attempt)?.let {
             attempt.modeStack.apply(behavior.action)
             SyntaxTreeNode(this, it)
         }
-        attempt.input.removeSave()
-        result
     }
 
     override fun resolveRawName() = start.rawName
@@ -236,9 +240,9 @@ public class LexerSymbol internal constructor(
 public class Text internal constructor(private val literal: String) : SimpleSymbol<Text>() {
     internal constructor(query: Char) : this(query.toString())
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val input = attempt.input
-        val matchExists = if (input is CharRevertibleIterator) {
+        val matchExists = if (input is CharRevertibleIterator<*>) {
             literal.all { input.hasNext() && it == input.next() }
         } else if (input.isExhausted()) {
             false
@@ -246,10 +250,11 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
             rawName == (input.next() as Token).name
         }
         input.revert()
-        takeIf { matchExists }?.let {
-            input.advance(if (input is CharRevertibleIterator) literal.length else 1)
-            SyntaxTreeNode(this, literal)
+        if (!matchExists) {
+            return null
         }
+        input.advance(if (input is CharRevertibleIterator<*>) literal.length else 1)
+        return SyntaxTreeNode(this, literal)
     }
 
     override fun resolveRawName() = "\"${literal.withEscapes()}\""
@@ -262,25 +267,26 @@ public class Switch internal constructor(
     private val literal: String,    // Before optimization
     private val ranges: List<CharRange>
 ) : SimpleSymbol<Switch>() {
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val input = attempt.input
         var substring = ""
         val matchExists = if (input.isExhausted()) {
             false
-        } else if (input is CharRevertibleIterator) {
+        } else if (input is CharRevertibleIterator<*>) {
             val next = input.peek()
             substring = next.toString()
             next satisfies ranges
         } else {
             val next = input.peek() as Token
             substring = next.substring
-            rawName != next.name
+            rawName != next.name    // Faster than checking for satisfaction
         }
         input.revert()
-        takeIf { matchExists }?.let {
-            input.advance(1)
-            SyntaxTreeNode(this, substring)
+        if (!matchExists) {
+            return null
         }
+        input.advance(1)
+        return SyntaxTreeNode(this, substring)
     }
 
     override fun resolveRawName() = "[${literal.withEscapes()}]"
@@ -299,7 +305,7 @@ public class Switch internal constructor(
  * If any one match is of an empty substring, no more matches are attempted.
  */
 public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Repetition<SubMatchT>>() {
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val input = attempt.input
         var subMatch: SyntaxTreeNode<SubMatchT>? = query.match(attempt).unsafeCast()
         val subMatches = mutableListOf<SyntaxTreeNode<SubMatchT>>()
@@ -315,11 +321,12 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         }
         debug { "Query matched ${subMatches.size} times" }
         input.revert()
-        takeIf { subMatches.isNotEmpty() }?.let {
-            val result = RepetitionNode(this, subMatches.concatenate(), subMatches)
-            input.advance(if (input is CharRevertibleIterator) result.substring.length else result.branches.size)
-            result
+        if (subMatches.isEmpty()) {
+            return null
         }
+        val result = RepetitionNode(this, subMatches.concatenate(), subMatches)
+        input.advance(if (input is CharRevertibleIterator<*>) result.substring.length else result.branches.size)
+        return result
     }
 
     override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "+"
@@ -331,12 +338,8 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
 public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSymbol<Option<SubMatchT>>() {
     private val emptyMatch = OptionNode(this, "", null)
 
-    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*> { // Fail check & pivoting unnecessary
-        debug { "Matching to query ${query.rawName} or empty match" }
-        attempt.here().symbols += this
-        val result = query.match(attempt)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
-        debugMatchSuccess(result)
-        return result
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*> {
+        return query.match(attempt)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
     }
 
     override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
@@ -352,8 +355,9 @@ public class Inversion(
 ) : SimpleSymbol<Inversion>() {
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
-        origin.resolveSymbols().values.asSequence()
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        return origin.resolveSymbols().values
+            .asSequence()
             .mapNotNull {
                 debug { "Attempting match to query: ${it.rawName}" }
                 it.match(attempt)
@@ -376,9 +380,10 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         components += option2
     }
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        val startPos = attempt.input.here()
         val result = components.asSequence()
-            .filter { it !in attempt.here().symbols /* prevent infinite recursion */ }
+            .filter { it !in startPos.symbols /* prevent infinite recursion */ }
             .map {
                 debug { "Attempting match to query: ${it.rawName}" }
                 it.match(attempt)
@@ -388,7 +393,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
             ?.unsafeCast<IndexedValue<SyntaxTreeNode<*>>>()
             ?.let { JunctionNode(typeSafe, it.value.substring, it.value, it.index) }
         attempt.input.removeSave()
-        result
+        return result
     }
 
     override fun resolveRawName() = components.joinToString(" | ")
@@ -406,14 +411,14 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         components += query2
     }
 
-    override fun match(attempt: ParsingAttempt) = matching(attempt) {
+    override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val input = attempt.input
         val firstQuery = components.first()
-        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.here().symbols) {
+        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.input.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
             debug { "Left-recursion found for non-junction query ${firstQuery.rawName}" }
             input.removeSave()
-            return@matching null
+            return null
         }
         var subMatch: SyntaxTreeNode<*>?
         val subMatches = mutableListOf<SyntaxTreeNode<*>>()
@@ -421,7 +426,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             subMatch = query.match(attempt)
             if (subMatch == null) {
                 input.revert()
-                return@matching null
+                return null
             }
             subMatches.add(subMatch)
             if (subMatch.substring.isNotEmpty()) {
@@ -429,7 +434,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             }
         }
         input.removeSave()
-        SequenceNode(typeSafe, subMatches.concatenate(), subMatches)
+        return SequenceNode(typeSafe, subMatches.concatenate(), subMatches)
     }
 
     override fun resolveRawName() = components.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
@@ -449,7 +454,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
 /**
  * A symbol matching the end of some input.
  */
-public class End : NameableSymbol<End>() {
+public class End : NameableSymbol<End>() {  // Doesn't make sense to cache this
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debug { "Matching to end of input" }
         return if (attempt.input.isExhausted()) {
@@ -460,5 +465,6 @@ public class End : NameableSymbol<End>() {
         }
     }
 
+    override fun matchNoCache(attempt: ParsingAttempt) = match(attempt)
     override fun resolveRawName() = "<end of input>"
 }

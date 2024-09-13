@@ -1,4 +1,4 @@
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 internal data class SourcePosition(
     val bufferSection: Int,

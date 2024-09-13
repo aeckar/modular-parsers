@@ -1,14 +1,14 @@
 @file:Suppress("DELEGATED_MEMBER_HIDES_SUPERTYPE_OVERRIDE")
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 import kotlinx.io.RawSource
 
 /**
  * Returns an iterator pivoting over the elements in the list.
  */
-public fun <E, H> List<E>.pivotIterator(init: () -> H): PivotIterator<E, H, Int> {
+public fun <E, H> List<E>.pivotIterator(init: () -> H): PivotIterator<E, Int, H> {
     val revertible = ListRevertibleIterator(this)
-    return object : AbstractPivotIterator<E, H, Int>(
+    return object : AbstractPivotIterator<E, Int, H>(
         revertible,
         init
     ), RevertibleIterator<E, Int> by revertible {}
@@ -17,12 +17,12 @@ public fun <E, H> List<E>.pivotIterator(init: () -> H): PivotIterator<E, H, Int>
 /**
  * Returns an iterator pivoting over the characters in this string.
  */
-public fun <H> String.pivotIterator(init: () -> H): CharPivotIterator<H, Int> {
+public fun <H> String.pivotIterator(init: () -> H): CharPivotIterator<Int, H> {
     val revertible = StringRevertibleIterator(this)
-    return object : AbstractPivotIterator<Char, H, Int>(
+    return object : AbstractPivotIterator<Char, Int, H>(
         revertible,
         init
-    ), CharPivotIterator<H, Int>, CharRevertibleIterator<Int> by revertible {}
+    ), CharPivotIterator<Int, H>, CharRevertibleIterator<Int> by revertible {}
 }
 
 /**
@@ -32,10 +32,10 @@ public fun <H> String.pivotIterator(init: () -> H): CharPivotIterator<H, Int> {
  * If this is [closed][RawSource.close],
  * any function called from the returned instance throws an [IllegalStateException].
  */
-public fun <H> RawSource.pivotIterator(init: () -> H): CharPivotIterator<H, *> {
+public fun <H> RawSource.pivotIterator(init: () -> H): CharPivotIterator<*, H> {
     val revertible = SourceRevertibleIterator(this)
-    return object : AbstractPivotIterator<Char, H, SourcePosition>(
+    return object : AbstractPivotIterator<Char, SourcePosition, H>(
         revertible,
         init
-    ), CharPivotIterator<H, SourcePosition>, CharRevertibleIterator<SourcePosition> by revertible {}
+    ), CharPivotIterator<SourcePosition, H>, CharRevertibleIterator<SourcePosition> by revertible {}
 }

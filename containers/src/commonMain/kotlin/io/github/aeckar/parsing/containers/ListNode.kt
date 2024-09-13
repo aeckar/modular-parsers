@@ -1,5 +1,5 @@
 @file:Suppress("DuplicatedCode")    // False positive
-package io.github.aeckar.parsing.primitives
+package io.github.aeckar.parsing.containers
 
 /**
  * An element in a linked list.
