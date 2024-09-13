@@ -13,12 +13,7 @@ public sealed interface LexerComponent
  * Can be delegated to a property to create a [NamedSymbol].
  */
 
-public sealed class ParserComponent {
-    /**
-     * The name assigned to this symbol if it exists, else its EBNF representation.
-     */
-    internal abstract val rawName: String
-
+public sealed class ParserComponent {   // Abstract class allows internal members
     /**
      * If this symbol is a wrapper of another symbol, returned the wrapped instance.
      *
@@ -29,5 +24,5 @@ public sealed class ParserComponent {
     /**
      * Returns the name assigned to this symbol if it exists, else its EBNF representation.
      */
-    final override fun toString(): String = rawName
+    abstract override fun toString(): String
 }

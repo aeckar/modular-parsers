@@ -193,7 +193,6 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
 
     final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.inputIterator())
     final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.inputIterator())
-
     final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
 
     private fun parse(input: InputIterator<*, *>): SyntaxTreeNode<*>? {

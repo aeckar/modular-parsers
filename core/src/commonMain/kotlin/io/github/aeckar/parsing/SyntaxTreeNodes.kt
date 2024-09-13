@@ -36,7 +36,7 @@ public open class SyntaxTreeNode<MatchT : Symbol> internal constructor(
      * Returns the name assigned to the symbol that produced this node if it exists,
      * else the symbol's EBNF representation.
      */
-    final override fun toString(): String = "${source.rawName} @ '$substring'"
+    final override fun toString(): String = "$source @ '$substring'"
 }
 
 // ------------------------------ option nodes ------------------------------

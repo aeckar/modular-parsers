@@ -20,7 +20,7 @@ public abstract class TypeSafeSymbol<
     }
 
     final override fun matchNoCache(attempt: ParsingAttempt) = match(attempt)
-    final override fun resolveRawName() = typeUnsafe.rawName
+    final override fun resolveString() = typeUnsafe.toString()
 }
 
 /**

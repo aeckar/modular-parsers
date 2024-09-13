@@ -38,6 +38,19 @@ public abstract class Symbol internal constructor() : ParserComponent() {
      * @throws UnsupportedOperationException this is a [NamedSymbol] or [End] symbol
      */
     internal abstract fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>?
+}
+
+/**
+ * A symbol that can be given a name by delegating it to a property.
+ *
+ * Delegating an instance of this class to a property produces a [NamedSymbol].
+ *
+ * Doing so enables:
+ * - [Importing][ParserDefinition.import] of symbols from other parsers
+ * - Definition of [recursive][TypeSafeSymbol] symbols
+ */
+public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal constructor() : Symbol() {
+    private val lazyString: String by lazy { resolveString() }
 
     /**
      * Performs the following:
@@ -54,24 +67,8 @@ public abstract class Symbol internal constructor() : ParserComponent() {
             debug { "End skip" }
         }
     }
-}
 
-/**
- * A symbol that can be given a name by delegating it to a property.
- *
- * Delegating an instance of this class to a property produces a [NamedSymbol].
- *
- * Doing so enables:
- * - [Importing][ParserDefinition.import] of symbols from other parsers
- * - Definition of [recursive][TypeSafeSymbol] symbols
- */
-public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal constructor() : Symbol() {
-    final override val rawName: String by lazy { resolveRawName() }
-
-    /**
-     * The returned name is not enclosed in parentheses.
-     */
-    internal abstract fun resolveRawName(): String
+    internal abstract fun resolveString(): String
 
     override fun unwrap() = this as Symbol
 
@@ -98,6 +95,8 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
         }
         return result
     }
+
+    override fun toString(): String = lazyString
 }
 
 /**
@@ -107,7 +106,6 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
     override val name: String,
     internal var unnamed: NameableSymbol<out UnnamedT>
 ) : Symbol(), Named {
-    final override val rawName: String get() = name
 
     final override fun unwrap() = unnamed
 
@@ -118,6 +116,8 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
     final override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         return match(attempt)
     }
+
+    override fun toString(): String = name
 }
 
 /**
@@ -174,7 +174,7 @@ public sealed class TypeUnsafeSymbol<
     final override fun unwrap() = super.unwrap()
 
     // Will not be called before all components are assembled
-    abstract override fun resolveRawName(): String
+    abstract override fun resolveString(): String
 }
 
 /**
@@ -192,11 +192,11 @@ public class LexerSymbol internal constructor(
     public class Fragment internal constructor(
         internal val root: Symbol
     ) : ParserComponent(), LexerComponent {
-        override val rawName get() = root.rawName
-
         internal fun lex(data: ParsingAttempt) = root.match(data)?.substring
 
         override fun unwrap() = root.unwrap()
+
+        override fun toString(): String = root.toString()
     }
 
     /**
@@ -229,7 +229,7 @@ public class LexerSymbol internal constructor(
         }
     }
 
-    override fun resolveRawName() = start.rawName
+    override fun resolveString() = start.toString()
 }
 
 // ------------------------------ specialized symbols ------------------------------
@@ -247,7 +247,7 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
         } else if (input.isExhausted()) {
             false
         } else {
-            rawName == (input.next() as Token).name
+            toString() == (input.next() as Token).name
         }
         input.revert()
         if (!matchExists) {
@@ -257,7 +257,7 @@ public class Text internal constructor(private val literal: String) : SimpleSymb
         return SyntaxTreeNode(this, literal)
     }
 
-    override fun resolveRawName() = "\"${literal.withEscapes()}\""
+    override fun resolveString() = "\"${literal.withEscapes()}\""
 }
 
 /**
@@ -279,7 +279,7 @@ public class Switch internal constructor(
         } else {
             val next = input.peek() as Token
             substring = next.substring
-            rawName != next.name    // Faster than checking for satisfaction
+            toString() != next.name // Faster than checking for satisfaction
         }
         input.revert()
         if (!matchExists) {
@@ -289,7 +289,7 @@ public class Switch internal constructor(
         return SyntaxTreeNode(this, substring)
     }
 
-    override fun resolveRawName() = "[${literal.withEscapes()}]"
+    override fun resolveString() = "[${literal.withEscapes()}]"
 
     public companion object {
         /**
@@ -329,7 +329,7 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         return result
     }
 
-    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "+"
+    override fun resolveString() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "+"
 }
 
 /**
@@ -342,7 +342,7 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
         return query.match(attempt)?.let { OptionNode(this, it.substring, it.unsafeCast()) } ?: emptyMatch
     }
 
-    override fun resolveRawName() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
+    override fun resolveString() = query.parenthesizeIf<TypeSafeSymbol<*, *>>() + "?"
 }
 
 /**
@@ -359,13 +359,13 @@ public class Inversion(
         return origin.resolveSymbols().values
             .asSequence()
             .mapNotNull {
-                debug { "Attempting match to query: ${it.rawName}" }
+                debug { "Attempting match to query: $it" }
                 it.match(attempt)
             }
             .firstOrNull()
     }
 
-    override fun resolveRawName() = "!$exclusion"
+    override fun resolveString() = "!$exclusion"
 }
 
 /**
@@ -385,7 +385,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         val result = components.asSequence()
             .filter { it !in startPos.symbols /* prevent infinite recursion */ }
             .map {
-                debug { "Attempting match to query: ${it.rawName}" }
+                debug { "Attempting match to query: $it" }
                 it.match(attempt)
             }
             .withIndex()
@@ -396,7 +396,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         return result
     }
 
-    override fun resolveRawName() = components.joinToString(" | ")
+    override fun resolveString() = components.joinToString(" | ")
 }
 
 /**
@@ -416,7 +416,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         val firstQuery = components.first()
         if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.input.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
-            debug { "Left-recursion found for non-junction query ${firstQuery.rawName}" }
+            debug { "Left-recursion found for non-junction query: $firstQuery" }
             input.removeSave()
             return null
         }
@@ -437,7 +437,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         return SequenceNode(typeSafe, subMatches.concatenate(), subMatches)
     }
 
-    override fun resolveRawName() = components.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
+    override fun resolveString() = components.joinToString(" ") { it.parenthesizeIf<TypeSafeJunction<*>>() }
 
     public companion object {
         /**
@@ -466,5 +466,5 @@ public class End : NameableSymbol<End>() {  // Doesn't make sense to cache this
     }
 
     override fun matchNoCache(attempt: ParsingAttempt) = match(attempt)
-    override fun resolveRawName() = "<end of input>"
+    override fun resolveString() = "<end of input>"
 }
