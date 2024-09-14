@@ -9,7 +9,7 @@ class ParserTest {
             val term by junction()
             val expression by junction()
 
-            val digit by of("0123456789")
+            val digit by of("0-9")
             val number by multiple(digit)
             val factor by '(' + expression + ')' or
                     number
@@ -22,9 +22,9 @@ class ParserTest {
                     term
 
             start = expression
-            skip = text(" ")
+            skip = multiple(" ")  // prefer multiple to any for skip symbols
         }
-        val ast = example.parse("(1+2)*3")
+        val ast = example.parse("(1 + 2) * 3")
         println()
         println(ast?.treeString())
     }

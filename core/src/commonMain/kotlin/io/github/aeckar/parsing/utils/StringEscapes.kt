@@ -31,4 +31,4 @@ internal fun String.redEmphasis() = "\u001B[1;4;31m$this\u001B[0m"
 internal fun String.greenEmphasis() = "\u001B[1;4;32m$this\u001B[0m"
 
 // Skip behavior
-internal fun String.magentaEmphasis() = "\u001B[1;35m$this\u001B[0m"
+internal fun String.magentaBold() = "\u001B[1;35m$this\u001B[0m"

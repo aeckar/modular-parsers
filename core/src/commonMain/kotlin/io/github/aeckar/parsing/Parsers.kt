@@ -64,9 +64,26 @@ private fun Parser.raiseUndefinedStart(): Nothing {
 }
 
 /**
+ * A nameable parser.
+ */
+public sealed class NameableParser(def: ParserDefinition): Nameable, Parser {
+    internal val id = def.hashCode()
+    internal val parserSymbols = def.compileSymbols()
+    internal val symbolListeners = def.resolveListeners()
+
+    init {
+        debug { "Defined with parser symbols $parserSymbols" }
+    }
+}
+
+/**
  * A named parser.
  */
-public sealed interface NamedParser : Named, Parser
+public sealed class NamedParser(internal val unnamed: NameableParser) : Named, Parser {
+    internal fun debugNamed(unnamed: NameableParser) {
+        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
+    }
+}
 
 // ------------------------------ nullary parsers ------------------------------
 
@@ -107,7 +124,9 @@ private fun NullaryParser.invokeListener(node: SyntaxTreeNode<*>) {
 /**
  * A named nullary parser.
  */
-public sealed interface NamedNullaryParser : NamedParser, NullaryParser
+public sealed class NamedNullaryParser(
+    unnamed: NameableParser
+) : NamedParser(unnamed), NullaryParser
 
 // ------------------------------ unary parsers ------------------------------
 
@@ -142,11 +161,11 @@ public operator fun <ArgumentT> UnaryParser<ArgumentT>.invoke(argument: Argument
     return ast
 }
 
-private fun <ArgumentT> UnaryParser<ArgumentT>.resolveInitializer() = when (this) {
+private fun <ArgumentT> UnaryParser<ArgumentT>.resolveInitializer(): ((ArgumentT) -> Unit)? = when (this) {
     is UnaryLexerlessParser<ArgumentT> -> initializer
     is UnaryLexerParser<ArgumentT> -> initializer
-    is NamedUnaryLexerParser -> unnamed.initializer
-    is NamedUnaryLexerlessParser -> unnamed.initializer
+    is NamedUnaryLexerParser -> (unnamed as UnaryLexerParser<*>).initializer.unsafeCast()
+    is NamedUnaryLexerlessParser -> (unnamed as UnaryLexerlessParser<*>).initializer.unsafeCast()
 }
 
 private fun <ArgumentT> UnaryParser<ArgumentT>.invokeListener(argument: ArgumentT, node: SyntaxTreeNode<*>) {
@@ -158,7 +177,9 @@ private fun <ArgumentT> UnaryParser<ArgumentT>.invokeListener(argument: Argument
 /**
  * A named unary parser.
  */
-public sealed interface NamedUnaryParser<in ArgumentT> : NamedParser, UnaryParser<ArgumentT>
+public sealed class NamedUnaryParser<in ArgumentT>(
+    unnamed: NameableParser
+) : NamedParser(unnamed), UnaryParser<ArgumentT>
 
 // ------------------------------ lexerless parsers ------------------------------
 
@@ -169,18 +190,15 @@ public sealed interface LexerlessParser : Parser
 
 internal fun LexerlessParser.resolveSkip() = when (this) {
     is NameableLexerlessParser -> skip
-    is NamedNullaryLexerlessParser -> unnamed.skip
-    is NamedUnaryLexerlessParser<*> -> unnamed.skip
+    is NamedNullaryLexerlessParser -> (unnamed as NullaryLexerlessParser).skip
+    is NamedUnaryLexerlessParser<*> -> (unnamed as UnaryLexerlessParser<*>).skip
 }
 
 /**
  * A nameable lexerless parser.
  */
-public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Nameable, LexerlessParser {
-    internal val parserSymbols = def.compileSymbols()
+public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : NameableParser(def), LexerlessParser {
     internal val skip = def.skipDelegate.field
-    internal open val symbolListeners = def.resolveListeners()
-    @Suppress("LeakingThis") internal val id = hashCode()
 
     private val start = def.startDelegate.field
 
@@ -188,7 +206,6 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
-        debug { "Defined with parser symbols $parserSymbols" }
     }
 
     final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.inputIterator())
@@ -206,8 +223,8 @@ public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : Na
 public class NullaryLexerlessParser internal constructor(
     def: NullaryLexerlessParserDefinition
 ) : NameableLexerlessParser(def), NullaryParser {
-    override val symbolListeners: Map<String, NullarySymbolListener<*>> get() = super.symbolListeners.unsafeCast()
-    override val listeners: Map<String, NullarySymbolListener<*>> by lazy { symbolListeners.toImmutableMap() }
+    override val listeners: Map<String, NullarySymbolListener<*>>
+        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -222,10 +239,10 @@ public class NullaryLexerlessParser internal constructor(
  */
 public class NamedNullaryLexerlessParser internal constructor(
     override val name: String,
-    internal val unnamed: NullaryLexerlessParser
-) : NamedNullaryParser, NullaryParser by unnamed, LexerlessParser {
+    unnamed: NullaryLexerlessParser
+) : NamedNullaryParser(unnamed), NullaryParser by unnamed, LexerlessParser {
     init {
-        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
+        debugNamed(unnamed)
     }
 
     override fun toString(): String = name
@@ -239,9 +256,8 @@ public class UnaryLexerlessParser<in ArgumentT> internal constructor(
 ) : NameableLexerlessParser(def), UnaryParser<ArgumentT> {
     internal val initializer = def.initializer
 
-    override val symbolListeners: Map<String, UnarySymbolListener<*, ArgumentT>>
-        get() = super.symbolListeners.unsafeCast()
-    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> by lazy { symbolListeners.toImmutableMap() }
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>>
+        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -256,12 +272,8 @@ public class UnaryLexerlessParser<in ArgumentT> internal constructor(
  */
 public class NamedUnaryLexerlessParser<in ArgumentT> internal constructor(
     override val name: String,
-    internal val unnamed: UnaryLexerlessParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT> by unnamed, LexerlessParser {
-    init {
-        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
-    }
-
+    unnamed: UnaryLexerlessParser<ArgumentT>
+) : NamedUnaryParser<ArgumentT>(unnamed), UnaryParser<ArgumentT> by unnamed, LexerlessParser {
     override fun toString(): String = name
 }
 
@@ -295,12 +307,8 @@ public sealed interface LexerParser : Lexer, Parser {
 /**
  * A nameable lexer-parser.
  */
-public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, LexerParser {
+public sealed class NameableLexerParser(def: LexerParserDefinition) : NameableParser(def), LexerParser {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
-
-    internal val parserSymbols = def.compileSymbols()
-    internal open val symbolListeners = def.resolveListeners()
-    internal val id = def.hashCode()
 
     private val lexerModes: Map<String, List<NamedSymbol<LexerSymbol>>> = def.lexerModes
     private val start = def.startDelegate.field
@@ -308,7 +316,6 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
-        debug { "Parser $id: Defined with parser symbols $parserSymbols" }
         debug { "Parser $id: Defined with lexer modes $lexerModes" }
     }
 
@@ -370,8 +377,8 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : Nameable, 
 public class NullaryLexerParser internal constructor(
     def: NullaryLexerParserDefinition
 ) : NameableLexerParser(def), NullaryParser, LexerParser {
-    override val symbolListeners: Map<String, NullarySymbolListener<*>> get() = super.symbolListeners.unsafeCast()
-    override val listeners: Map<String, NullarySymbolListener<*>> by lazy { symbolListeners.toImmutableMap() }
+    override val listeners: Map<String, NullarySymbolListener<*>>
+        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -386,13 +393,9 @@ public class NullaryLexerParser internal constructor(
  */
 public class NamedNullaryLexerParser internal constructor(
     override val name: String,
-    internal val unnamed: NullaryLexerParser
-) : NamedNullaryParser, NullaryParser, LexerParser by unnamed {
-    override val listeners: Map<String, NullarySymbolListener<*>> get() = unnamed.listeners
-
-    init {
-        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
-    }
+    unnamed: NullaryLexerParser
+) : NamedNullaryParser(unnamed), NullaryParser, LexerParser by unnamed {
+    override val listeners: Map<String, NullarySymbolListener<*>> get() = unnamed.listeners.unsafeCast()
 
     override fun toString(): String = name
 }
@@ -405,9 +408,8 @@ public class UnaryLexerParser<in ArgumentT> internal constructor(
 ) : NameableLexerParser(def), UnaryParser<ArgumentT> {
     internal val initializer = def.lexerless.initializer
 
-    override val symbolListeners: Map<String, UnarySymbolListener<*, ArgumentT>>
-        get() = super.symbolListeners.unsafeCast()
-    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> by lazy { symbolListeners.toImmutableMap() }
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>>
+        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -422,13 +424,9 @@ public class UnaryLexerParser<in ArgumentT> internal constructor(
  */
 public class NamedUnaryLexerParser<in ArgumentT> internal constructor(
     override val name: String,
-    internal val unnamed: UnaryLexerParser<ArgumentT>
-) : NamedUnaryParser<ArgumentT>, UnaryParser<ArgumentT>, LexerParser by unnamed {
-    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> get() = unnamed.listeners
-
-    init {
-        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
-    }
+    unnamed: UnaryLexerParser<ArgumentT>
+) : NamedUnaryParser<ArgumentT>(unnamed), UnaryParser<ArgumentT>, LexerParser by unnamed {
+    override val listeners: Map<String, UnarySymbolListener<*, ArgumentT>> get() = unnamed.listeners.unsafeCast()
 
     override fun toString(): String = name
 }

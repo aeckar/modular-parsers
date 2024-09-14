@@ -2,19 +2,19 @@ import io.github.aeckar.parsing.containers.TreeNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-private class MutableTreeNode(val ordinal: Int) : TreeNode<MutableTreeNode>() {
-    override val children: MutableList<MutableTreeNode> = mutableListOf()
+private class SimpleTreeNode(val ordinal: Int) : TreeNode<SimpleTreeNode>() {
+    override val children: MutableList<SimpleTreeNode> = mutableListOf()
 
     override fun toString() = "*"
 }
 
-class TreeTests {
-    private val tree = MutableTreeNode(4)
+class TreeNodeTests {
+    private val tree = SimpleTreeNode(4)
 
     init {
-        tree.children.add(MutableTreeNode(0))
-        tree.children.add(MutableTreeNode(2).apply { children.add(MutableTreeNode(1)) })
-        tree.children.add(MutableTreeNode(3))
+        tree.children.add(SimpleTreeNode(0))
+        tree.children.add(SimpleTreeNode(2).apply { children.add(SimpleTreeNode(1)) })
+        tree.children.add(SimpleTreeNode(3))
     }
 
     @Test

@@ -17,6 +17,19 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
     public open val children: List<Self> = persistentListOf()
 
     /**
+     * Contains the specific characters used to create the [treeString] of a node.
+     */
+    public data class Style(val vertical: Char, val horizontal: Char, val turnstile: Char, val corner: Char) {
+        /**
+         * Returns a line map containing the given characters.
+         * @throws IllegalArgumentException [chars] does not contain exactly 4 characters
+         */
+        public constructor(chars: String) : this(chars[0], chars[1], chars[2], chars[3]) {
+            require(chars.length == 4) { "String '$chars' must have 4 characters'" }
+        }
+    }
+
+    /**
      * Returns a multi-line string containing the entire tree whose root is this node.
      */
     public fun treeString(lines: Style = UTF_8): String {
@@ -52,19 +65,6 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
             layers += false
             children.last().appendSubtree(builder, lines, layers)
             layers.removeLast()
-        }
-    }
-
-    /**
-     * Contains the specific characters used to create the [treeString] of a node.
-     */
-    public data class Style(val vertical: Char, val horizontal: Char, val turnstile: Char, val corner: Char) {
-        /**
-         * Returns a line map containing the given characters.
-         * @throws IllegalArgumentException [chars] does not contain exactly 4 characters
-         */
-        public constructor(chars: String) : this(chars[0], chars[1], chars[2], chars[3]) {
-            require(chars.length == 4) { "String '$chars' must have 4 characters'" }
         }
     }
 

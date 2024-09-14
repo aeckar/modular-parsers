@@ -26,12 +26,8 @@ public abstract class Symbol internal constructor(
         debug { "Unwrapping symbol: ${wrapped.toString().blue()}" }
     }
 
-    protected fun debugRewrap() {
-        debug { "Rewrap" }
-    }
-
     protected fun debugQuery(query: Symbol) {
-        debug { "Attempting match to query: ${query.toString().blue()}" }
+        debug { "Attempting match to: ${query.toString().blue()}" }
     }
 
     protected fun debugMatchSuccess(result: SyntaxTreeNode<*>) {
@@ -96,12 +92,12 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
      */
     internal fun align(attempt: ParsingAttempt) {
         attempt.skip?.let {
-            debug { "Attempting match to skip: ".magentaEmphasis() + attempt.skip.toString().blue() }
+            debug { "Attempting match to skip: ".magentaBold() + attempt.skip.toString().blue() }
             val previousSkip = attempt.skip
             attempt.skip = null // Prevent infinite recursion
             it.match(attempt)
             attempt.skip = previousSkip
-            debug { "End skip".magentaEmphasis() }
+            debug { "End skip".magentaBold() }
         }
     }
 
@@ -112,23 +108,23 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val startPos = attempt.input.here()
         if (this in startPos.fails) {
-            debugMatchFail { "Previous match attempt failed" }
+            debugMatchFail { "Previous attempt failed" }
             return null
         }
         startPos.successes[this]?.let {
-            debugMatchSuccess(it) { "Previous match attempt succeeded" }
+            debugMatchSuccess(it) { "Previous attempt succeeded" }
             return it.unsafeCast()
         }
-        debug { "Attempting match" }
+        debug { println(attempt.input.pivots()); "Attempting match" }
         startPos.symbols += this
         attempt.input.save()
         val result = matchNoCache(attempt)
         if (result != null) {
             debugMatchSuccess(result)
-            attempt.input.here().successes[this] = result // 'here' is at a different position
+            startPos.successes[this] = result
         } else {
             debugMatchFail()
-            attempt.input.here().fails += this
+            startPos.fails += this
         }
         return result
     }
@@ -148,9 +144,7 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debugUnwrap(unnamed)
-        val result = unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
-        debugRewrap()
-        return result
+        return unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
     }
 
     final override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
@@ -174,7 +168,6 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
         attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
         val result = unnamed.match(attempt)
         attempt.skip = previousSkip
-        debugRewrap()
         return result
     }
 }
@@ -261,12 +254,10 @@ public class LexerSymbol internal constructor(
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debugUnwrap(start.root)
-        val result = start.lex(attempt)?.let {
+        return start.lex(attempt)?.let {
             attempt.modeStack.apply(behavior.action)
             SyntaxTreeNode(this, it)
         }
-        debugRewrap()
-        return result
     }
 
     override fun unwrap() = start.unwrap()
@@ -340,6 +331,7 @@ public class Switch internal constructor(
     }
 }
 
+// TODO add "begin" and "end" messages for parsers during lexing, parsing
 /**
  * A symbol matching another symbol one or more times in a row.
  *
@@ -350,7 +342,6 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         val input = attempt.input
         var subMatch: SyntaxTreeNode<SubMatchT>? = query.match(attempt).unsafeCast()
         val subMatches = mutableListOf<SyntaxTreeNode<SubMatchT>>()
-        debug { "Attempting matches to query: $query" }
         while (subMatch != null) {
             subMatches += subMatch
             if (subMatch.substring.isEmpty()) { // No need to push to fail stack
@@ -461,6 +452,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
             input.removeSave()
             return null
         }
+        // No need to clarify that each subsequent match is a query in log, since they are ordered
         var subMatch: SyntaxTreeNode<*>?
         val subMatches = mutableListOf<SyntaxTreeNode<*>>()
         for (query in components) {
