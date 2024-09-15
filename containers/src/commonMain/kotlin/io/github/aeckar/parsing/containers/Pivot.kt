@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing.containers
 
+public fun <P : Comparable<P>, H> pivot(): (Pair<P, H>) -> Pivot<P, H> = { Pivot(it.first, it.second) }
+
 /**
  * An object containing a position and a value.
  * @param position the location of this in some larger object
@@ -8,34 +10,41 @@ package io.github.aeckar.parsing.containers
 public data class Pivot<P : Comparable<P>, out H>(
     public val position: P,
     public val value: H
-) : ListNode<Pivot<P, @UnsafeVariance H>>() {
-    /**
-     * Returns a pivot with the position and value contained in the pair, respectively.
-     */
-    public constructor(properties: Pair<P, H>) : this(properties.first, properties.second)
-}
+) : ListNode<Pivot<P, @UnsafeVariance H>>()
 
 /**
- * Returns the pivot whose position has a total ordering equal to [location].
+ * Returns the pivot whose position has a [total ordering][Comparable] equal to the one given.
  *
  * If one does not exist, it is inserted according to the ordering of [P].
- * If the receiver is null, the result of [init] is returned.
  */
-public fun <H, P : Comparable<P>> Pivot<P, H>?.findOrInsert(location: P, init: () -> Pivot<P, H>): Pivot<P, H> {
-    var node = this ?: return init()
-    if (location.compareTo(position) == 0) {
+public fun <H, P : Comparable<P>> Pivot<P, H>.getOrInsert(position: P, lazyValue: () -> H): Pivot<P, H> {
+    /**
+     * Assumes positions are not equal.
+     */
+    fun Pivot<P, H>.insert(): Pivot<P, H> {
+        val pivot = Pivot(position, lazyValue())
+        if (this.position > position) {
+            insertBefore(pivot)
+        } else {
+            insertAfter(pivot)
+        }
+        return pivot
+    }
+
+    if (position.compareTo(this.position) == 0) {
         return this
     }
-    if (location < position) {
-        node = node.seek { location >= node.position }
-        if (location.compareTo(node.position) == 0) {
+    var node = this
+    if (this.position > position) {
+        node = node.backtrace { node.position <= position }
+        if (position.compareTo(node.position) == 0) {
             return node
         }
-        return init().also { node.append(it) }
+        return node.insert()
     }
-    node = node.backtrace { location <= node.position }
-    if (location.compareTo(node.position) == 0) {
+    node = node.seek { node.position >= position }
+    if (position.compareTo(node.position) == 0) {
         return node
     }
-    return init().also { node.prepend(it) }
+    return node.insert()
 }

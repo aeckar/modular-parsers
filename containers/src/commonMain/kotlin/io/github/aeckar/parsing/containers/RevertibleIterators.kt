@@ -94,11 +94,11 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
     }
 
     final override fun revert() {
-        position = savedPositions.removeLast()
+        position = removeLastSave()
     }
 
     final override fun removeSave() {
-        savedPositions.removeLast()
+        removeLastSave()
     }
 
     final override fun position() = position
@@ -117,6 +117,14 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
         var result = elements.hashCode()
         result = 31 * result + position
         return result
+    }
+
+    private fun removeLastSave(): Int {
+        return try {
+            savedPositions.removeLast()
+        } catch (e: NoSuchElementException) {
+            error("No positions saved")
+        }
     }
 }
 
@@ -164,14 +172,14 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
     }
 
     override fun revert() {
-        savedPositions.removeLast().let { (section, position) ->
+        removeLastSave().let { (section, position) ->
             this.section = section
             this.sectionPosition = position
         }
     }
 
     override fun removeSave() {
-        savedPositions.removeLast()
+        removeLastSave()
     }
 
     override fun hasNext() = sectionPosition < buffer[section].length || loadSection()
@@ -205,6 +213,14 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         result = 31 * result + section
         result = 31 * result + sectionPosition
         return result
+    }
+
+    private fun removeLastSave(): SourcePosition {
+        return try {
+            savedPositions.removeLast()
+        } catch (e: NoSuchElementException) {
+            error("No positions saved")
+        }
     }
 
     private fun verifySection() {

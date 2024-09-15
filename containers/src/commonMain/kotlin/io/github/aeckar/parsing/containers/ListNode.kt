@@ -5,13 +5,17 @@ package io.github.aeckar.parsing.containers
  * Returns the head of the doubly-linked list that is created when the nodes
  * with the given arguments are joined together in the same order.
  */
-public inline fun <P, Self : ListNode<Self>> linkedList(
+public inline fun <P, Self : ListNode<Self>> linkedListOf(
     init: (P) -> Self,
-    properties1: P, vararg propertiesN: P
+    first: P,
+    vararg others: P
 ): Self {
-    val head = init(properties1)
-    for ((properties, node) in propertiesN.zip(head)) {
-        node.append(init(properties))
+    val head = init(first)
+    var curNode = head
+    for (argument in others) {
+        val next = init(argument)
+        curNode.insertAfter(next)
+        curNode = next
     }
     return head
 }
@@ -23,7 +27,9 @@ public inline fun <P, Self : ListNode<Self>> linkedList(
  * Iterates over the elements in the linked list, starting from and including this one.
  */
 public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
-    private var next: Self? = null
+    @PublishedApi
+    internal var next: Self? = null
+
     private var last: Self? = null
 
     /**
@@ -46,7 +52,7 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
      * Inserts the given node directly after this one.
      * @throws IllegalArgumentException [node] is this same instance
      */
-    public fun append(node: Self) {
+    public fun insertAfter(node: Self) {
         require(this !== node) { "Cannot append node to itself" }
         next?.apply { last = node }
         node.next = next
@@ -58,7 +64,7 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
      * Inserts the given node directly before this one.
      * @throws IllegalArgumentException [node] is this same instance
      */
-    public fun prepend(node: Self) {
+    public fun insertBefore(node: Self) {
         require(this !== node) { "Cannot append node to itself" }
         last?.apply { next = node }
         node.last = last
@@ -84,6 +90,13 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
     }
 
     /**
+     * Returns the head of this linked list.
+     */
+    public fun head(): Self {
+        return if (last == null) this as Self else reversed().last()
+    }
+
+    /**
      * Returns the tail of this linked list.
      */
     public fun tail(): Self {
@@ -103,13 +116,6 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
             tail = element
         }
         return tail
-    }
-
-    /**
-     * Returns the head of this linked list.
-     */
-    public fun head(): Self {
-        return if (last == null) this as Self else reversed().last()
     }
 
     /**

@@ -32,7 +32,7 @@ internal abstract class AbstractPivotIterator<out E, P : Comparable<P>, out H> i
     private var cursor: Pivot<P, H>? = null
 
     final override fun here(): H {
-        val node = cursor.findOrInsert(revertible.position()) { Pivot(revertible.position(), init()) }
+        val node = cursor?.getOrInsert(revertible.position()) { init() } ?: Pivot(revertible.position(), init())
         this.cursor = node
         return node.value
     }
