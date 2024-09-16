@@ -3,7 +3,7 @@ package io.github.aeckar.parsing.containers
 /**
  * A sequence of characters providing unboxed access to each element.
  *
- * Serves as an interface for [kotlin.collections.CharIterator].
+ * Interface equivalent of [kotlin.collections.CharIterator].
  */
 public interface CharIterator : Iterator<Char> {
     /**

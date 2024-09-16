@@ -34,7 +34,7 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
      */
     public fun treeString(lines: Style = UTF_8): String {
         val builder = StringBuilder()
-        appendSubtree(builder, lines, layers = BooleanStack())
+        appendSubtree(builder, lines, branches = BooleanList())
         builder.deleteAt(builder.lastIndex) // Remove trailing newline
         return builder.toString()
     }
@@ -42,10 +42,10 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
     private fun appendSubtree(
         builder: StringBuilder,
         lines: Style,
-        layers: BooleanStack
+        branches: BooleanList
     ): Unit = with(builder) {
         fun prefixWith(corner: Char) {
-            layers.forEach { append(if (it) "${lines.vertical}   " else "    ") }
+            branches.forEach { append(if (it) "${lines.vertical}   " else "    ") }
             append(corner)
             append(lines.horizontal)
             append(lines.horizontal)
@@ -57,14 +57,14 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
         if (children.isNotEmpty()) {
             children.asSequence().take(children.size.coerceAtLeast(1) - 1).forEach {
                 prefixWith(lines.turnstile)
-                layers += true
-                it.appendSubtree(builder, lines, layers)
-                layers.removeLast()
+                branches += true
+                it.appendSubtree(builder, lines, branches)
+                branches.removeLast()
             }
             prefixWith(lines.corner)
-            layers += false
-            children.last().appendSubtree(builder, lines, layers)
-            layers.removeLast()
+            branches += false
+            children.last().appendSubtree(builder, lines, branches)
+            branches.removeLast()
         }
     }
 
@@ -77,7 +77,7 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
     final override fun iterator(): Iterator<Self> = @Suppress("UNCHECKED_CAST") object : Iterator<Self> {
         private var cursor = this@TreeNode as Self
         private val parentStack = mutableListOf<Self>()
-        private val childIndices = IntStack()
+        private val childIndices = IntList()
 
         init {
             childIndices += 0   // Prevent underflow in loop condition
@@ -96,7 +96,7 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
             while (childIndices.last() <= cursor.children.lastIndex) {
                 parentStack.add(cursor)
                 cursor = cursor.children[childIndices.last()]
-                childIndices.mapLast(Int::inc)
+                ++childIndices.last
                 childIndices += 0
             }
             return cursor

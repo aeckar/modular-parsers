@@ -83,7 +83,7 @@ tasks.register("generateTypeSafe") {
 
     val resourcesPath = "${projectDir}/src/commonMain/resources"
     val typeSafePackage = "io/github/aeckar/parsing/typesafe"
-    val typeSafeTemplatePath = "/TypeSafeDeclarations.kt.vm"
+    val typeSafeTemplatePath = "/TypeSafe.kt.vm"
 
     inputs.file("$resourcesPath/$typeSafeTemplatePath")
 

@@ -83,7 +83,7 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
      */
     protected var position = 0
 
-    private val savedPositions = IntStack()
+    private val savedPositions = IntList()
 
     final override fun advance(places: Int) {
         position += places

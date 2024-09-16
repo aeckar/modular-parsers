@@ -1,11 +1,14 @@
-import io.github.aeckar.parsing.parser
+@file:Suppress("LocalVariableName")
+
+import io.github.aeckar.parsing.*
+import io.github.aeckar.parsing.containers.DoubleList
 import kotlin.test.Test
 
 // TODO ebnf to mp as well
 class ParserTest {
     @Test
-    fun f() {
-        val example by parser {
+    fun `basic arithmetic`() {
+        val math by parser {
             val term by junction()
             val expression by junction()
 
@@ -22,10 +25,78 @@ class ParserTest {
                     term
 
             start = expression
-            skip = multiple(" ")  // prefer multiple to any for skip symbols
+            skip = multiple(" ")  // Prefer multiple to any for skip symbols
         }
-        val ast = example.parse("(1 + 2) * 3")
-        println()
-        println(ast?.treeString())
+        println("\n" + math.parse("(1 + 2) * 3")?.treeString())
+        // from source...
+    }
+
+    @Test
+    fun `arithmetic with evaluation`() {
+        val math by parser {
+            // ---- fragments ----
+            val DIGIT = of("0-9")
+
+            // ---- symbols ----
+            val expression by junction()
+
+            fun operation(symbol: Char) = expression + symbol + expression
+
+            val addition by operation('+')
+            val subtraction by operation('-')
+            val multiplication by operation('*')
+            val division by operation('/')
+
+            //val number by any(DIGIT) + maybe('.') + any(DIGIT) not '.'
+            val number by any(DIGIT) + maybe('.') + any(DIGIT)
+
+            // ---- configuration ----
+            expression.actual = '(' + expression + ')' or
+                    multiplication or
+                    division or
+                    addition or
+                    subtraction or
+                    number
+
+            start = expression
+            skip = multiple(" ")
+
+            // ---- mutable state ----
+            val operands = DoubleList()
+
+            // ---- listeners ----
+
+            addition listener {
+                operands += operands.removeLast() + operands.removeLast()
+            }
+
+            subtraction listener {
+                operands += operands.removeLast() - operands.removeLast()
+            }
+
+            multiplication listener {
+                operands += operands.removeLast() * operands.removeLast()
+            }
+
+            division listener {
+                operands += operands.removeLast() / operands.removeLast()
+            }
+
+            number listener {
+                operands += substring.toDouble()
+            }
+
+            returns { operands.last }
+        }
+        println("\n" + math("(1 + 2) * 3")?.treeString())
+    }
+
+    @Test
+    fun ebnf() {
+        val ebnf by parser {
+
+        }
+        println("\n" + ebnf.parse("(1 + 2) * 3")?.treeString())
+        // from source...
     }
 }

@@ -11,17 +11,19 @@ private data class SimpleListNode(val ordinal: Int) : ListNode<SimpleListNode>()
 class ListNodeTests {
     @Test
     fun `get or insert pivot`() {
-        val head = Pivot(1, "head")
-        var query = head.getOrInsert(1) { "first" }
-        check(query === head)
-        head.apply {
+        val initial = Pivot(1, "head")
+        check(initial.getOrInsert(1) { "first" } === initial)
+        initial.apply {
             getOrInsert(-8) { "negative eighth" }
             getOrInsert(2) { "second" }
             getOrInsert(17) { "seventeenth" }
             getOrInsert(5) { "fifth" }
             getOrInsert(20) { "twentieth" }
         }
-        println(head.toList())  // -8, 1, 2, 5, 17, 20
+        assertContentEquals(
+            expected = listOf(-8, 1, 2, 5, 17, 20),
+            actual = initial.head().toList().map { it.position }
+        )
     }
 
     @Test

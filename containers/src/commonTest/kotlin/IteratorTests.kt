@@ -15,6 +15,29 @@ private const val SOURCE_TXT = "A3Z8q9B5C2"
 private val LIST = listOf("first", 2, 3.0)
 
 class IteratorTests {
+    private fun RevertibleIterator<*, *>.testReverting(elements: List<*>) {
+        assertFailsWith<NoSuchElementException> { revert() }
+        save()
+        save()
+        next()
+        removeSave()
+        assertEquals(elements[1], next())
+        revert()
+        assertEquals(elements[0], next())
+    }
+
+    private fun PivotIterator<*, *, Array<Int>>.testPivoting() {
+        save()
+        save()
+        next()
+        removeSave()
+        next()
+        here()[0] = 16
+        revert()
+        advance(2)
+        assertEquals(16, here()[0])
+    }
+
     @Test
     fun `revertible list iterator`() {
         assertContentEquals(LIST, LIST.revertibleIterator().asSequence().toList())
@@ -57,28 +80,5 @@ class IteratorTests {
         getSource().pivotIterator { arrayOf(0) }.testReverting(SOURCE_TXT.toList())
         getSource().pivotIterator { arrayOf(0) }.testPivoting()
         // play with SECTION_SIZE, too
-    }
-
-    private fun RevertibleIterator<*, *>.testReverting(elements: List<*>) {
-        assertFailsWith<NoSuchElementException> { revert() }
-        save()
-        save()
-        next()
-        removeSave()
-        assertEquals(elements[1], next())
-        revert()
-        assertEquals(elements[0], next())
-    }
-
-    private fun PivotIterator<*, *, Array<Int>>.testPivoting() {
-        save()
-        save()
-        next()
-        removeSave()
-        next()
-        here()[0] = 16
-        revert()
-        advance(2)
-        assertEquals(16, here()[0])
     }
 }
