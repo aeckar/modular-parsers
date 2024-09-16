@@ -1,12 +1,7 @@
 package io.github.aeckar.parsing
 
-import io.github.aeckar.parsing.utils.unsafeCast
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
-
-internal fun <ValueT, PropertyT : ReadOnlyProperty<Any?, ValueT>> ValueT.readOnlyProperty(): PropertyT {
-    return ReadOnlyProperty<Any?, ValueT> { _, _ -> this }.unsafeCast()
-}
 
 /**
  * Delegating an instance of this class to a property assigns it

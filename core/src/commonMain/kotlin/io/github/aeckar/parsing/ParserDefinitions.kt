@@ -38,6 +38,7 @@ public sealed class ParserDefinition {
     /**
      * @throws MalformedParserException the assertion fails
      */
+    // TODO check
     protected fun ensureUndefinedListener(name: String) {
         if (name in resolveListeners()) {
             throw MalformedParserException("Listener for symbol '$name' defined more than once")
@@ -58,6 +59,21 @@ public sealed class ParserDefinition {
         is NullaryParserDefinition -> (this as NullaryParserDefinition).resolveListeners()
         is UnaryParserDefinition<*> -> (this as UnaryParserDefinition<*>).resolveListeners()
     }
+
+    // ------------------------------ parser-operators ------------------------------
+
+    /**
+     * Specifies the type, [R], returned when the parser
+     * created by the definition returning this is invoked.
+     * @see ParserOperator
+     */
+    public class ReturnDescriptor<R> internal constructor(internal val lazyValue: () -> R)
+
+    /**
+     * Returns a [ReturnDescriptor], which if returned by this parser definition
+     * will create a [ParserOperator].
+     */
+    public fun <R> returns(lazyValue: () -> R): ReturnDescriptor<R> = ReturnDescriptor(lazyValue)
 
     // ------------------------------ symbol definition & import/export ------------------------------
 
@@ -86,34 +102,18 @@ public sealed class ParserDefinition {
      * Imports the symbol with the given name from this parser for a single use.
      * @throws NoSuchElementException the symbol is undefined
      */
-    public operator fun NamedNullaryParser.get(symbolName: String): Symbol {
-        return resolveSymbols()[symbolName]?.let { NullaryForeignSymbol(NamedSymbol(symbolName, it), this) }
-            ?: raiseUndefinedImport(symbolName)
-    }
-
-    /**
-     * See [get] for details.
-     */
-    public operator fun NamedUnaryParser<*>.get(symbolName: String): Symbol {
-        return resolveSymbols()[symbolName]?.let { UnaryForeignSymbol(NamedSymbol(symbolName, it), this) }
-            ?: raiseUndefinedImport(symbolName)
+    public operator fun NamedParser.get(symbolName: String): Symbol {
+        return resolveSymbols()[symbolName]?.let { ForeignSymbol(NamedSymbol(symbolName, it), this) }
+            ?: throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
     }
 
     /**
      * Allows the importing of a symbol from another named parser.
      * @param UnnamedT the type of the specified symbol
      */
-    public fun <UnnamedT : NameableSymbol<out UnnamedT>> NamedNullaryParser.import(
-    ): NullarySymbolImport<UnnamedT> {
-        return NullarySymbolImport(this)
-    }
-
-    /**
-     * See [import] for details.
-     */
-    public fun <UnnamedT : NameableSymbol<out UnnamedT>, ArgumentT> NamedUnaryParser<ArgumentT>.import(
-    ): UnarySymbolImport<UnnamedT, ArgumentT> {
-        return UnarySymbolImport(this)
+    public fun <UnnamedT : NameableSymbol<UnnamedT>> NamedParser.import(
+    ): ImportDescriptor<UnnamedT> {
+        return ImportDescriptor(this)
     }
 
     /**
@@ -122,10 +122,18 @@ public sealed class ParserDefinition {
      *
      * If the symbol is not defined in the parser, a [MalformedParserException] will be thrown upon delegation.
      */
-    public abstract inner class SymbolImport<ForeignT : ForeignSymbol<*>> : Nameable {
-        internal abstract val origin: Parser
+    public inner class ImportDescriptor<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
+        internal val origin: Parser
+    ) : Nameable {
+        override fun provideDelegate(
+            thisRef: Any?,
+            property: KProperty<*>
+        ): ReadOnlyProperty<Any?, ForeignSymbol<UnnamedT>> {
+            return ForeignSymbol<UnnamedT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+                .readOnlyProperty()
+        }
 
-        protected fun resolveSymbol(name: String): NamedSymbol<*> {
+        private fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
                 origin.resolveSymbols().getValue(name)
             } catch (e: NoSuchElementException) {
@@ -140,53 +148,14 @@ public sealed class ParserDefinition {
      * Ensures that the specified extension listener can be created.
      * @throws MalformedParserException the assertion fails
      */
-    internal fun Parser.ensureExtensionCandidate(name: String) {
+    private fun Parser.ensureExtensionCandidate(name: String) {
         ensureUndefinedListener(name)
         if (name !in resolveListeners()) {
             throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
         }
     }
 
-    /**
-     * Used to import a symbol from a [NullaryParser].
-     */
-    public inner class NullarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>> internal constructor(
-        override val origin: NullaryParser
-    ) : SymbolImport<NullaryForeignSymbol<UnnamedT>>() {
-        override fun provideDelegate(
-            thisRef: Any?,
-            property: KProperty<*>
-        ): ReadOnlyProperty<Any?, NullaryForeignSymbol<UnnamedT>> {
-            return NullaryForeignSymbol<UnnamedT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
-                .readOnlyProperty()
-        }
-    }
-
-    /**
-     * Used to import a symbol from a [UnaryParser].
-     */
-    public inner class UnarySymbolImport<UnnamedT : NameableSymbol<out UnnamedT>, ArgumentT> internal constructor(
-        override val origin: UnaryParser<ArgumentT>
-    ) : SymbolImport<UnaryForeignSymbol<UnnamedT, ArgumentT>>() {
-        override fun provideDelegate(
-            thisRef: Any?,
-            property: KProperty<*>
-        ): ReadOnlyProperty<Any?, UnaryForeignSymbol<UnnamedT, ArgumentT>> {
-            return UnaryForeignSymbol<UnnamedT, ArgumentT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
-                .readOnlyProperty()
-        }
-    }
-
-    private fun NamedParser.raiseUndefinedImport(symbolName: String): Nothing {
-        throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
-    }
-
-    // ------------------------------ symbol inversions & implicit symbols ------------------------------
-
-    /**
-     * Returns an [Inversion] of this symbol.
-     */
-    public operator fun NamedSymbol<*>.not(): Inversion = Inversion(this)
+    // ------------------------------ inversions & implicit symbol factories ------------------------------
 
     /**
      * The definition of this implicit symbol.
@@ -222,7 +191,7 @@ public sealed class ParserDefinition {
      */
     public fun sequence(): TypeUnsafeSequence<*> = TypeUnsafeSequence()
 
-    // ------------------------------ text & switches ------------------------------
+    // ------------------------------ symbol factories ------------------------------
 
     /**
      * Returns the switch literal inverse to this string.
@@ -233,7 +202,6 @@ public sealed class ParserDefinition {
      * Returns a [Text] symbol.
      */
     protected open fun text(query: String): ParserComponent = Text(query)
-
 
     /**
      * Returns a [character switch][Switch] symbol.
@@ -247,16 +215,12 @@ public sealed class ParserDefinition {
      */
     protected open fun of(switch: String): ParserComponent = Switch(switch, switch.toRanges().optimizeRanges())
 
-    // ------------------------------ options ------------------------------
-
     /**
      * Returns an [Option] of the given symbol.
      *
      * For [Text] symbols, consider using the appropriate overload.
      */
     public fun <QueryT : Symbol> maybe(query: QueryT): Option<QueryT> = Option(query)
-
-    // ------------------------------ repetitions ------------------------------
 
     /**
      * Returns a [Repetition] of the given symbol.
@@ -265,43 +229,41 @@ public sealed class ParserDefinition {
      */
     public fun <QueryT : Symbol> multiple(query: QueryT): Repetition<QueryT> = Repetition(query)
 
-    // ------------------------------ optional repetitions ------------------------------
-
     /**
      * Returns an optional repetition of the given symbol.
      */
     public fun <QueryT : Symbol> any(query: QueryT): Option<Repetition<QueryT>> = maybe(multiple(query))
 
-    // ------------------------------ junctions ------------------------------
+    /**
+     * Returns an [Inversion] of this symbol.
+     */
+    public operator fun NameableSymbol<*>.not(): Inversion = Inversion(this)
 
-    // Allow type-safe junctions and sequences to be root of new junction/sequence (types are checked anyway)
+    /**
+     * Returns an [End] symbol.
+     */
+    public fun end(): End = endSymbol
+
+    // Allow all other type-safe junctions and sequences to use these factories
+    // If IDE shows errors, run `generateTypeSafe` Gradle task
 
     /**
      * Returns a junction of the two symbols.
      */
     public infix fun <S1 : Symbol, S2 : Symbol> S1.or(option2: S2): Junction2<S1, S2> = toJunction(this, option2)
 
-    protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
-        return Junction2(TypeUnsafeJunction(option1, option2).unsafeCast())
-    }
-
-    // ------------------------------ sequences ------------------------------
-
     /**
      * Returns a sequence containing the two symbols.
      */
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
+    protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
+        return Junction2(TypeUnsafeJunction(option1, option2).unsafeCast())
+    }
+
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
         return Sequence2(TypeUnsafeSequence(query1, query2).unsafeCast())
     }
-
-    // ------------------------------ end of input ------------------------------
-
-    /**
-     * Returns an [End] symbol.
-     */
-    public fun end(): End = endSymbol
 }
 
 /*

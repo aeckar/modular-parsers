@@ -6,54 +6,42 @@ import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
 import kotlin.jvm.JvmName
 
-// TODO Go back to using symbols wrapped in named-symbol directly
-
 /**
- * Creates a new [NameableLexerlessParser].
+ * Creates a new, nameable [LexerlessParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
-public fun parser(definition: NullaryLexerlessParserDefinition.() -> Unit): NullaryLexerlessParser {
+public fun parser(definition: NullaryLexerlessParserDefinition.() -> Unit): LexerlessParser {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
-    return NullaryLexerlessParser(NullaryLexerlessParserDefinition().apply(definition))
+    return LexerlessParser(NullaryLexerlessParserDefinition().apply(definition))
 }
 
 /**
- * Creates a new [NameableLexerlessParser] that takes an argument.
- *
- * Use of supplied arguments is restricted to the
- * [init][UnaryLexerlessParserDefinition.init] block and symbol [listeners][UnaryLexerlessParserDefinition.listener].
+ * Creates a new, nameable [LexerlessParserOperator].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
-public fun <ArgumentT> parser(
-    definition: UnaryLexerlessParserDefinition<ArgumentT>.() -> Unit
-): UnaryLexerlessParser<ArgumentT> {
+public fun <R> parser(definition: NullaryLexerlessParserDefinition.() -> ReturnDescriptor<R>): LexerlessParserOperator {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
-    return UnaryLexerlessParser(UnaryLexerlessParserDefinition<ArgumentT>().apply(definition))
+    return LexerlessParserOperator(NullaryLexerlessParserDefinition().apply(definition))
 }
 
 /**
- * Creates a new [NameableLexerParser].
+ * Creates a new, nameable [NameableLexerParser].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
-public fun lexerParser(definition: NullaryLexerParserDefinition.() -> Unit): NullaryLexerParser {
+public fun lexerParser(definition: NullaryLexerParserDefinition.() -> Unit): LexerParser {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
-    return NullaryLexerParser(NullaryLexerParserDefinition().apply(definition))
+    return LexerParser(NullaryLexerParserDefinition().apply(definition))
 }
 
 /**
- * Creates a new [NameableLexerParser] that takes an argument.
- *
- * Use of supplied arguments is restricted to the
- * [init][UnaryLexerParserDefinition.init] block and symbol [listeners][UnaryLexerParserDefinition.listener].
+ * Creates a new, nameable [LexerParserOperator].
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
-public fun <ArgumentT> lexerParser(
-    definition: UnaryLexerParserDefinition<ArgumentT>.() -> Unit
-): UnaryLexerParser<ArgumentT> {
+public fun <R> lexerParser(definition: NullaryLexerParserDefinition.() -> ReturnDescriptor<R>): LexerParserOperator {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
-    return UnaryLexerParser(UnaryLexerParserDefinition<ArgumentT>().apply(definition))
+    return LexerParserOperator(NullaryLexerParserDefinition().apply(definition))
 }

@@ -60,7 +60,7 @@ public abstract class Symbol internal constructor(
      * 3. Appends this symbol to the top of the fail stack if not matched
      * 4. Returns the result
      *
-     * Either this function, or [matchNoCache] must be overriden, but not both.
+     * Either this function, or [matchNoCache] must be overridden, but not both.
      */
     internal abstract fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>?
 
@@ -157,12 +157,11 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
 /**
  * A symbol [imported][ParserDefinition.import] from another parser.
  */
-public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
+public class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
     named: NamedSymbol<out UnnamedT>,
+    internal val origin: Parser
 ) : NamedSymbol<UnnamedT>(named.name, named.unnamed) {
-    internal abstract val origin: Parser
-
-    final override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+    override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debugUnwrap(unnamed)
         val previousSkip = attempt.skip
         attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
@@ -171,22 +170,6 @@ public sealed class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
         return result
     }
 }
-
-/**
- * A foreign symbol originating from a [NullaryParser].
- */
-public class NullaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>> internal constructor(
-    named: NamedSymbol<out UnnamedT>,
-    override val origin: NullaryParser
-) : ForeignSymbol<UnnamedT>(named)
-
-/**
- * A foreign symbol originating from a [UnaryParser].
- */
-public class UnaryForeignSymbol<UnnamedT: NameableSymbol<out UnnamedT>, in ArgumentT> internal constructor(
-    named: NamedSymbol<out UnnamedT>,
-    override val origin: UnaryParser<ArgumentT>
-) : ForeignSymbol<UnnamedT>(named)
 
 /**
  * A symbol representing a symbol that is not a [TypeUnsafeSymbol].
@@ -383,11 +366,12 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
  * If the affiliated parser is a [NameableLexerParser], match attempts are only made to lexer symbols.
  */
 public class Inversion(
-    private val exclusion: NamedSymbol<*>
+    private val antiquery: NamedSymbol<*>
 ) : SimpleSymbol<Inversion>() {
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
+        debug { "Attempting match to any not of: " + antiquery.toString().blue() }
         return origin.resolveSymbols().values
             .asSequence()
             .mapNotNull {
@@ -397,7 +381,7 @@ public class Inversion(
             .firstOrNull()
     }
 
-    override fun resolveString() = "!${exclusion.parenthesizeIf { it !is SimpleSymbol<*> }}"
+    override fun resolveString() = "!${antiquery.parenthesizeIf { it !is SimpleSymbol<*> }}"
 }
 
 /**
