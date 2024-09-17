@@ -7,10 +7,10 @@ class NumberListTests {
     @Test
     fun `underflow fails`() {
         val x = IntList()
-        assertFailsWith<NoSuchElementException> { x.removeLast() }
+        assertFailsWith<IllegalStateException> { x.removeLast() }
         x += 16
         x.removeLast()
-        assertFailsWith<NoSuchElementException> { x.removeLast() }
+        assertFailsWith<IllegalStateException> { x.removeLast() }
     }
 
     @Test
@@ -19,7 +19,7 @@ class NumberListTests {
         x += 7
         x += 2
         x += 5
-        assertEquals(5, x.last())
+        assertEquals(5, x.last)
         x.removeLast()
         assertEquals(2, x.removeLast())
     }

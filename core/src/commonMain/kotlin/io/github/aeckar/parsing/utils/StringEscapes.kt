@@ -16,19 +16,19 @@ internal fun String.withEscapes() = buildString {
 // ------------------------------ color escapes ------------------------------
 
 // Input substrings
-internal fun String.yellow() = "\u001B[33m$this\u001B[0m"
+internal fun Any?.yellow() = "\u001B[33m$this\u001B[0m"
 
 // Symbols
-internal fun String.blue() = "\u001B[34m$this\u001B[0m"
+internal fun Any?.blue() = "\u001B[34m$this\u001B[0m"
 
 // Debug message location
-internal fun String.grey() = "\u001B[90m$this\u001B[0m"
+internal fun Any?.grey() = "\u001B[90m$this\u001B[0m"
 
 // "Match failed"
-internal fun String.redEmphasis() = "\u001B[1;4;31m$this\u001B[0m"
+internal fun Any?.redEmphasis() = "\u001B[1;4;31m$this\u001B[0m"
 
 // "Match succeeded"
-internal fun String.greenEmphasis() = "\u001B[1;4;32m$this\u001B[0m"
+internal fun Any?.greenEmphasis() = "\u001B[1;4;32m$this\u001B[0m"
 
 // Skip behavior
-internal fun String.magentaBold() = "\u001B[1;35m$this\u001B[0m"
+internal fun Any?.magentaBold() = "\u001B[1;35m$this\u001B[0m"

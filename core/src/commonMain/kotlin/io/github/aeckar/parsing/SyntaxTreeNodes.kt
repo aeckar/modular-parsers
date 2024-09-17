@@ -4,11 +4,13 @@ package io.github.aeckar.parsing
 import io.github.aeckar.parsing.typesafe.JunctionNode
 import io.github.aeckar.parsing.typesafe.TypeSafeJunction
 import io.github.aeckar.parsing.containers.TreeNode
-import io.github.aeckar.parsing.utils.fragileUnsafeCast
+import io.github.aeckar.parsing.utils.unsafeCast
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.jvm.JvmName
 
 // Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
+
+// TODO add functions to work with named symbol AST nodes
 
 /**
  * A matched substring in a given input produced according to the matching logic of a symbol.
@@ -54,19 +56,21 @@ internal class OptionNode<SubMatchT : Symbol> internal constructor(
 /**
  * Returns true if a match to a token was made.
  */
-public fun SyntaxTreeNode<Option<*>>.matchSucceeded(): Boolean = fragileUnsafeCast<OptionNode<*>>().match != null
+public fun SyntaxTreeNode<Option<*>>.matchSucceeded(): Boolean = unsafeCast<OptionNode<*>>().match != null
 
 /**
  * Returns true if a match to a token was not made.
  */
-public fun SyntaxTreeNode<Option<*>>.matchFailed(): Boolean = fragileUnsafeCast<OptionNode<*>>().match == null
+public fun SyntaxTreeNode<Option<*>>.matchFailed(): Boolean = unsafeCast<OptionNode<*>>().match == null
 
 /**
  * Performs the [action] using the matched token, [if present][matchSucceeded].
  * Otherwise, does nothing.
  */
-public inline fun <SubMatchT : Symbol> SyntaxTreeNode<Option<SubMatchT>>.onSuccess(action: SyntaxTreeNode<SubMatchT>.() -> Unit) {
-    fragileUnsafeCast<OptionNode<SubMatchT>>().match?.apply(action)
+public inline fun <SubMatchT : Symbol> SyntaxTreeNode<Option<SubMatchT>>.onSuccess(
+    action: SyntaxTreeNode<SubMatchT>.() -> Unit
+) {
+    unsafeCast<OptionNode<SubMatchT>>().match?.apply(action)
 }
 
 // ------------------------------ repetition nodes ------------------------------
@@ -87,10 +91,10 @@ internal class RepetitionNode<SubMatchT : Symbol> internal constructor(
 /**
  * The index of the option matched by the symbol emitting this token.
  */
-public val SyntaxTreeNode<TypeUnsafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
+public val SyntaxTreeNode<TypeUnsafeJunction<*>>.matchOrdinal: Int get() = unsafeCast<JunctionNode>().matchOrdinal
 
 /**
  * The index of the option matched by the symbol emitting this token.
  */
 @get:JvmName("typeSafeMatchOrdinal")
-public val SyntaxTreeNode<out TypeSafeJunction<*>>.matchOrdinal: Int get() = fragileUnsafeCast<JunctionNode>().matchOrdinal
+public val SyntaxTreeNode<out TypeSafeJunction<*>>.matchOrdinal: Int get() = unsafeCast<JunctionNode>().matchOrdinal

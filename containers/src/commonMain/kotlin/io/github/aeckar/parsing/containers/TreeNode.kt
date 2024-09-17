@@ -93,9 +93,9 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
         override fun next(): Self {
             cursor = parentStack.removeLast()
             childIndices.removeLast()
-            while (childIndices.last() <= cursor.children.lastIndex) {
+            while (childIndices.last <= cursor.children.lastIndex) {
                 parentStack.add(cursor)
-                cursor = cursor.children[childIndices.last()]
+                cursor = cursor.children[childIndices.last]
                 ++childIndices.last
                 childIndices += 0
             }

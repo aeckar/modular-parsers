@@ -23,11 +23,11 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
 public abstract class Symbol internal constructor(
 ) : ParserComponent() { // Unseal to allow inheritance from type-safe symbols
     protected fun debugUnwrap(wrapped: Symbol) {
-        debug { "Unwrapping symbol: ${wrapped.toString().blue()}" }
+        debug { "Unwrapping symbol: ${wrapped.blue()}" }
     }
 
     protected fun debugQuery(query: Symbol) {
-        debug { "Attempting match to: ${query.toString().blue()}" }
+        debug { "Attempting match to: ${query.blue()}" }
     }
 
     protected fun debugMatchSuccess(result: SyntaxTreeNode<*>) {
@@ -115,7 +115,7 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
             debugMatchSuccess(it) { "Previous attempt succeeded" }
             return it.unsafeCast()
         }
-        debug { println(attempt.input.pivots()); "Attempting match" }
+        debug { "Attempting match" }
         startPos.symbols += this
         attempt.input.save()
         val result = matchNoCache(attempt)
@@ -164,7 +164,7 @@ public class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         debugUnwrap(unnamed)
         val previousSkip = attempt.skip
-        attempt.skip = (origin as? LexerlessParser)?.resolveSkip()
+        attempt.skip = (origin as? LexerlessParser)?.skip
         val result = unnamed.match(attempt)
         attempt.skip = previousSkip
         return result
@@ -363,16 +363,16 @@ public class Option<SubMatchT : Symbol>(private val query: SubMatchT) : SimpleSy
 /**
  * A symbol matching the first of any but one named symbol in the parser this symbol originates from.
  *
- * If the affiliated parser is a [NameableLexerParser], match attempts are only made to lexer symbols.
+ * If the affiliated parser is a [LexerParser], match attempts are only made to lexer symbols.
  */
 public class Inversion(
-    private val antiquery: NamedSymbol<*>
+    private val antiquery: NameableSymbol<*>
 ) : SimpleSymbol<Inversion>() {
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debug { "Attempting match to any not of: " + antiquery.toString().blue() }
-        return origin.resolveSymbols().values
+        debug { "Attempting match to any not of: " + antiquery.blue() }
+        return origin.parserSymbols.values
             .asSequence()
             .mapNotNull {
                 debugQuery(it)

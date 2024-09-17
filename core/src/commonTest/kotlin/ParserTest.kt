@@ -8,7 +8,7 @@ import kotlin.test.Test
 class ParserTest {
     @Test
     fun `basic arithmetic`() {
-        val math by parser {
+        val math = parser {
             val term by junction()
             val expression by junction()
 
@@ -27,13 +27,13 @@ class ParserTest {
             start = expression
             skip = multiple(" ")  // Prefer multiple to any for skip symbols
         }
-        println("\n" + math.parse("(1 + 2) * 3")?.treeString())
+        println(math.parse("(1 + 2) * 3")?.treeString())
         // from source...
     }
 
     @Test
     fun `arithmetic with evaluation`() {
-        val math by parser {
+        val math = parserOperator {
             // ---- fragments ----
             val DIGIT = of("0-9")
 
@@ -47,8 +47,8 @@ class ParserTest {
             val multiplication by operation('*')
             val division by operation('/')
 
-            //val number by any(DIGIT) + maybe('.') + any(DIGIT) not '.'
-            val number by any(DIGIT) + maybe('.') + any(DIGIT)
+            val number by any(DIGIT) + '.' + multiple(DIGIT) or
+                    multiple(DIGIT) + any('.') + any(DIGIT)
 
             // ---- configuration ----
             expression.actual = '(' + expression + ')' or
@@ -65,7 +65,6 @@ class ParserTest {
             val operands = DoubleList()
 
             // ---- listeners ----
-
             addition listener {
                 operands += operands.removeLast() + operands.removeLast()
             }
@@ -88,15 +87,16 @@ class ParserTest {
 
             returns { operands.last }
         }
-        println("\n" + math("(1 + 2) * 3")?.treeString())
+        println(math("(1 + 2) * 3"))
+        // from source...
     }
 
     @Test
     fun ebnf() {
-        val ebnf by parser {
+        val ebnf = parser {
 
         }
-        println("\n" + ebnf.parse("(1 + 2) * 3")?.treeString())
+        println(ebnf.parse("(1 + 2) * 3")?.treeString())
         // from source...
     }
 }

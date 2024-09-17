@@ -9,6 +9,8 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
+internal const val DEFAULT_MODE_NAME = ""
+
 // ------------------------------------ abstract parser definitions ------------------------------------
 
 /**
@@ -18,7 +20,8 @@ import kotlin.reflect.KProperty
  */
 @ListenerDsl
 public sealed class ParserDefinition {
-    internal val startDelegate = OnceAssignable<Symbol, _>(raise = ::MalformedParserException)
+    internal val startDelegate = OnceAssignable<Symbol>(::MalformedParserException)
+    internal val returnValueDelegate = OnceAssignable<() -> Any?>(::IllegalStateException)
 
     /**
      * The principal symbol to be matched.
@@ -31,19 +34,11 @@ public sealed class ParserDefinition {
 
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()      // Not including imports, implicits
     internal val inversionSymbols = mutableSetOf<Inversion>()
+    internal val listeners = mutableMapOf<String, Listener<*>>()
+    internal var returnValue by returnValueDelegate
 
     private val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
     private val endSymbol = End()
-
-    /**
-     * @throws MalformedParserException the assertion fails
-     */
-    // TODO check
-    protected fun ensureUndefinedListener(name: String) {
-        if (name in resolveListeners()) {
-            throw MalformedParserException("Listener for symbol '$name' defined more than once")
-        }
-    }
 
     internal fun compileSymbols(): Map<String, NameableSymbol<*>> {
         val allSymbols = HashMap<String, NameableSymbol<*>>(parserSymbols.size + implicitSymbols.size)
@@ -55,25 +50,31 @@ public sealed class ParserDefinition {
         return allSymbols
     }
 
-    internal fun resolveListeners() = when (this) {
-        is NullaryParserDefinition -> (this as NullaryParserDefinition).resolveListeners()
-        is UnaryParserDefinition<*> -> (this as UnaryParserDefinition<*>).resolveListeners()
-    }
-
     // ------------------------------ parser-operators ------------------------------
 
     /**
      * Specifies the type, [R], returned when the parser
      * created by the definition returning this is invoked.
-     * @see ParserOperator
+     * @see Operator
      */
-    public class ReturnDescriptor<R> internal constructor(internal val lazyValue: () -> R)
+    public class ReturnDescriptor<R> private constructor() {
+        internal companion object {
+            val INSTANCE: ReturnDescriptor<*> = ReturnDescriptor<Nothing>()
+        }
+    }
 
     /**
      * Returns a [ReturnDescriptor], which if returned by this parser definition
-     * will create a [ParserOperator].
+     * will create a [Operator].
      */
-    public fun <R> returns(lazyValue: () -> R): ReturnDescriptor<R> = ReturnDescriptor(lazyValue)
+    public fun <R> returns(lazyValue: () -> R): ReturnDescriptor<R> {
+        try {
+            returnValue = lazyValue
+        } catch (e: IllegalStateException) {
+            throw MalformedParserException("Ambiguous return value", e)
+        }
+        return ReturnDescriptor.INSTANCE.unsafeCast()
+    }
 
     // ------------------------------ symbol definition & import/export ------------------------------
 
@@ -102,16 +103,16 @@ public sealed class ParserDefinition {
      * Imports the symbol with the given name from this parser for a single use.
      * @throws NoSuchElementException the symbol is undefined
      */
-    public operator fun NamedParser.get(symbolName: String): Symbol {
-        return resolveSymbols()[symbolName]?.let { ForeignSymbol(NamedSymbol(symbolName, it), this) }
-            ?: throw MalformedParserException("Symbol '$symbolName' is undefined in parser '$name'")
+    public operator fun Parser.get(symbolName: String): Symbol {
+        return parserSymbols[symbolName]?.let { ForeignSymbol(NamedSymbol(symbolName, it), this) }
+            ?: throw MalformedParserException("Symbol '$symbolName' is undefined")
     }
 
     /**
      * Allows the importing of a symbol from another named parser.
      * @param UnnamedT the type of the specified symbol
      */
-    public fun <UnnamedT : NameableSymbol<UnnamedT>> NamedParser.import(
+    public fun <UnnamedT : NameableSymbol<UnnamedT>> Parser.import(
     ): ImportDescriptor<UnnamedT> {
         return ImportDescriptor(this)
     }
@@ -129,33 +130,22 @@ public sealed class ParserDefinition {
             thisRef: Any?,
             property: KProperty<*>
         ): ReadOnlyProperty<Any?, ForeignSymbol<UnnamedT>> {
-            return ForeignSymbol<UnnamedT>(resolveSymbol(property.name).fragileUnsafeCast(), origin)
+            return ForeignSymbol<UnnamedT>(resolveSymbol(property.name).unsafeCast(), origin)
                 .readOnlyProperty()
         }
 
         private fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                origin.resolveSymbols().getValue(name)
+                origin.parserSymbols.getValue(name)
             } catch (e: NoSuchElementException) {
-                throw MalformedParserException("Symbol '$name' is not defined in parser '$origin'", e)
+                throw MalformedParserException("Symbol '$name' is not defined", e)
             }
             parserSymbols[name] = symbol
             return NamedSymbol(name, symbol)
         }
     }
 
-    /**
-     * Ensures that the specified extension listener can be created.
-     * @throws MalformedParserException the assertion fails
-     */
-    private fun Parser.ensureExtensionCandidate(name: String) {
-        ensureUndefinedListener(name)
-        if (name !in resolveListeners()) {
-            throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
-        }
-    }
-
-    // ------------------------------ inversions & implicit symbol factories ------------------------------
+    // ------------------------------ inversion & implicit symbol factories ------------------------------
 
     /**
      * The definition of this implicit symbol.
@@ -191,7 +181,64 @@ public sealed class ParserDefinition {
      */
     public fun sequence(): TypeUnsafeSequence<*> = TypeUnsafeSequence()
 
-    // ------------------------------ symbol factories ------------------------------
+    // ------------------------------ listener DSL ------------------------------
+
+    /**
+     * A listener assigned to a symbol that emits the given node.
+     */
+    public fun interface Listener<MatchT : Symbol> {
+        /**
+         * Invokes the lambda that defines the listener of a specific named symbol.
+         */
+        public operator fun SyntaxTreeNode<MatchT>.invoke()
+    }
+
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol, the listener is invoked.
+     */
+    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: Listener<MatchT>) {
+        ensureUndefinedListener(name)
+        listeners[name] = action
+    }
+
+    /**
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol,
+     * the listener previously defined for this symbol is invoked before this one is.
+     */
+    public infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
+        action: Listener<MatchT>
+    ) {
+        origin.ensureExtensionCandidate(name)
+        listeners[name] = Listener {
+            with(origin.listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
+                this@Listener()
+            }
+            with(action) { this@Listener() }
+        }
+    }
+
+    private fun ensureUndefinedListener(name: String) {
+        if (name in listeners) {
+            throw MalformedParserException("Listener for symbol '$name' defined more than once")
+        }
+    }
+
+    /**
+     * Ensures that the specified extension listener can be created.
+     * @throws MalformedParserException the assertion fails
+     */
+    private fun Parser.ensureExtensionCandidate(name: String) {
+        ensureUndefinedListener(name)
+        if (name !in listenersMap) {
+            throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
+        }
+    }
+
+    // ------------------------------ other symbol factories ------------------------------
 
     /**
      * Returns the switch literal inverse to this string.
@@ -266,92 +313,11 @@ public sealed class ParserDefinition {
     }
 }
 
-/*
-    Junctions and sequences between two characters are not implemented because
-    users can simply use a character switch instead.
- */
-
-/**
- * A [definition][ParserDefinition] of a parser without an argument.
- */
-public sealed interface NullaryParserDefinition {
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol, the listener is invoked.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: NullarySymbolListener<MatchT>
-    )
-
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol,
-     * the listener previously defined for this symbol is invoked before this one is.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: NullarySymbolListener<MatchT>
-    )
-}
-
-
-internal fun NullaryParserDefinition.resolveListeners(): Map<String, NullarySymbolListener<*>> = when (this) {
-    is NullaryLexerlessParserDefinition -> symbolListeners
-    is NullaryLexerParserDefinition -> lexerless.symbolListeners
-}
-
-/**
- * A [definition][ParserDefinition] of a parser with one argument.
- */
-public sealed interface UnaryParserDefinition<ArgumentT> {
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol, the listener is invoked.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    )
-
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol,
-     * the listener previously defined for this symbol is invoked before this one is.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    )
-
-    /**
-     * See [extendsListener] for details.
-     */
-    public infix fun <MatchT : NameableSymbol<MatchT>>
-    UnaryForeignSymbol<MatchT, ArgumentT>.extendsListener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    )
-
-    /**
-     * Describes the initialization logic of the argument supplied to this parser.
-     */
-    public fun init(initializer: (ArgumentT) -> Unit)
-}
-
-internal fun <ArgumentT>
-        UnaryParserDefinition<ArgumentT>.resolveListeners(): Map<String, UnarySymbolListener<Symbol, ArgumentT>> =
-    when (this) {
-        is UnaryLexerlessParserDefinition<*> -> symbolListeners.unsafeCast()
-        is UnaryLexerParserDefinition<*> -> lexerless.symbolListeners.unsafeCast()
-    }
-
-// ------------------------------------ lexerless parser definitions ------------------------------------
-
 /**
  * Defines a scope where a [Parser] without a lexer can be defined.
  */
-public sealed class LexerlessParserDefinition : ParserDefinition() {
-    internal val skipDelegate = OnceAssignable<Symbol, _>(raise = ::MalformedParserException)
+public class LexerlessParserDefinition internal constructor() : ParserDefinition() {
+    internal val skipDelegate = OnceAssignable<Symbol>(::MalformedParserException)
 
     /**
      * The symbol whose matches are discarded during parsing.
@@ -361,7 +327,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public var skip: Symbol by skipDelegate
 
-    // ------------------------------ text & switches ------------------------------
+    // ------------------------------ text & switch factories ------------------------------
 
     /**
      * Assigns a [Text] symbol of the single character to the property being delegated to.
@@ -373,10 +339,10 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
         return NamedSymbol(symbol.name, Text(this)).readOnlyProperty()
     }
 
-    public final override fun text(query: String): Text = super.text(query).unsafeCast()
-    public final override fun of(switch: String): Switch = super.of(switch).unsafeCast()
+    public override fun text(query: String): Text = super.text(query).unsafeCast()
+    public override fun of(switch: String): Switch = super.of(switch).unsafeCast()
 
-    // ------------------------------ options ------------------------------
+    // ------------------------------ option factories ------------------------------
 
     /**
      * Returns a text [Option].
@@ -393,7 +359,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public fun maybeOf(switch: String): Option<Switch> = maybe(of(switch))
 
-    // ------------------------------ repetitions ------------------------------
+    // ------------------------------ repetition factories ------------------------------
 
     /**
      * Returns a text [Repetition].
@@ -410,7 +376,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public fun multipleOf(switch: String): Repetition<Switch> = multiple(of(switch))
 
-    // ------------------------------ optional repetitions ------------------------------
+    // ------------------------------ optional repetition factories ------------------------------
 
     /**
      * Returns an optional repetition of the text.
@@ -427,7 +393,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public fun anyOf(switch: String): Option<Repetition<Switch>> = any(of(switch))
 
-    // ------------------------------ junctions ------------------------------
+    // ------------------------------ junction factories ------------------------------
 
     /**
      * Returns a junction of this text and the given symbol.
@@ -439,7 +405,7 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
      */
     public infix fun <S1 : Symbol> S1.or(option2: Char): Junction2<S1, Text> = toJunction(this, Text(option2))
 
-    // ------------------------------ sequences ------------------------------
+    // ------------------------------ sequence factories ------------------------------
 
     /**
      * Returns a sequence containing this text and the given symbol.
@@ -453,99 +419,14 @@ public sealed class LexerlessParserDefinition : ParserDefinition() {
 }
 
 /**
- * Defines a scope where a [Parser] without a lexer that does not take an argument can be defined.
+ * Defines a scope where a [LexerParser] can be defined.
  */
-public class NullaryLexerlessParserDefinition internal constructor(
-) : LexerlessParserDefinition(), NullaryParserDefinition {
-    internal val symbolListeners = mutableMapOf<String, NullarySymbolListener<*>>()
+public class LexerParserDefinition internal constructor() : ParserDefinition() {
+    internal val recoveryDelegate = OnceAssignable<LexerComponent>(::MalformedParserException)
 
     /**
-     * Assigns an action to be performed whenever a successful match is made using this symbol.
-     */
-    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: NullarySymbolListener<MatchT>
-    ) {
-        ensureUndefinedListener(name)
-        symbolListeners[name] = action
-    }
-
-    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: NullarySymbolListener<MatchT>
-    ) {
-        origin.ensureExtensionCandidate(name)
-        symbolListeners[name] = NullarySymbolListener {
-            with(origin.resolveListeners().getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
-                this@NullarySymbolListener()
-            }
-            with(action) { this@NullarySymbolListener() }
-        }
-    }
-}
-
-/**
- * Defines a scope where a [Parser] without a lexer that takes one argument can be defined.
- */
-public class UnaryLexerlessParserDefinition<ArgumentT> internal constructor(
-) : LexerlessParserDefinition(), UnaryParserDefinition<ArgumentT> {
-    internal val symbolListeners = mutableMapOf<String, UnarySymbolListener<*, ArgumentT>>()
-
-    internal var initializer: ((ArgumentT) -> Unit)? = null
-
-    /**
-     * Assigns an action to be performed whenever a successful match is made using this symbol.
-     */
-    override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    ) {
-        ensureUndefinedListener(name)
-        symbolListeners[name] = action
-    }
-
-    override fun <MatchT : NameableSymbol<out MatchT>> NullaryForeignSymbol<out MatchT>.extendsListener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    ) {
-        origin.ensureExtensionCandidate(name)
-        symbolListeners[name] = UnarySymbolListener {
-            with(origin.resolveListeners().getValue(name).unsafeCast<NullarySymbolListener<MatchT>>()) {
-                this@UnarySymbolListener()
-            }
-            with(action) { this@UnarySymbolListener(it) }
-        }
-    }
-
-    override fun <MatchT : NameableSymbol<MatchT>>
-    UnaryForeignSymbol<MatchT, ArgumentT>.extendsListener(
-        action: UnarySymbolListener<MatchT, ArgumentT>
-    ) {
-        origin.ensureExtensionCandidate(name)
-        symbolListeners[name] = UnarySymbolListener {
-            with(origin.resolveListeners().getValue(name).unsafeCast<UnarySymbolListener<MatchT, ArgumentT>>()) {
-                this@UnarySymbolListener(it)
-            }
-            with(action) { this@UnarySymbolListener(it) }
-        }
-    }
-
-    /**
-     * Describes the initialization logic of arguments supplied to this parser.
-     */
-    override fun init(initializer: (ArgumentT) -> Unit) {
-        this.initializer?.let { throw MalformedParserException("Initializer defined more than once") }
-        this.initializer = initializer
-    }
-}
-
-// ------------------------------------ lexer-parser definitions ------------------------------------
-
-/**
- * Defines a scope where a [NameableLexerParser] can be defined.
- */
-public sealed class LexerParserDefinition : ParserDefinition() {
-    internal val recoveryDelegate = OnceAssignable<LexerComponent, _>(::MalformedParserException)
-
-    /**
-     * During [tokenization][Lexer.tokenize], if a sequence of characters cannot be matched to a named [LexerSymbol],
-     * any adjacent substrings matching this symbol that do not match a named lexer symbol
+     * During [tokenization][LexerParser.tokenize], if a sequence of characters cannot be matched
+     * to a named [LexerSymbol], any adjacent substrings matching this symbol that do not match a named lexer symbol
      * are combined into a single unnamed token.
      *
      * If left unspecified and a match cannot be made to a named lexer symbol, an [IllegalTokenException] is thrown.
@@ -553,21 +434,21 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      * (e.g., if this is an [Option]).
      * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
-    public val recovery: LexerComponent by recoveryDelegate
+    public var recovery: LexerComponent by recoveryDelegate
 
     /**
      * The lexer symbols to be ignored during lexical analysis.
      *
-     * Nodes produced by these symbols will not be present in the list returned by [NameableLexerParser.tokenize].
+     * Nodes produced by these symbols will not be present in the list returned by [LexerParser.tokenize].
      * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()
 
     internal val lexerModes = mutableMapOf<String, MutableList<NamedSymbol<LexerSymbol>>>()
 
-    private var mode = ""   // default lexer mode name
+    private var mode = DEFAULT_MODE_NAME
 
-    // ------------------------------ lexer modes -------------------------
+    // ------------------------------ lexer mode configuration -------------------------
 
     /**
      * Signals that all lexer symbols defined hereafter and before the next mode
@@ -586,7 +467,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      * should be used exclusively when in the default (initial) lexer mode.
      */
     public fun defaultMode() {
-        mode = ""
+        mode = DEFAULT_MODE_NAME
     }
 
     /**
@@ -632,7 +513,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
         return NamedSymbol(symbol.name, LexerSymbol(fragment, behavior)).readOnlyProperty()
     }
 
-    // ------------------------------ text & switches ------------------------------
+    // ------------------------------ text & switch factories ------------------------------
 
     /**
      * Assigns a [LexerSymbol] matching this character to the property being delegated to.
@@ -646,12 +527,12 @@ public sealed class LexerParserDefinition : ParserDefinition() {
         return named.readOnlyProperty()
     }
 
-    public final override fun text(query: String): Fragment = Fragment(Text(query))
-    public final override fun of(switch: String): Fragment {
+    public override fun text(query: String): Fragment = Fragment(Text(query))
+    public override fun of(switch: String): Fragment {
         return Fragment(super.of(switch).unsafeCast())
     }
 
-    // ------------------------------ options ------------------------------
+    // ------------------------------ option factories ------------------------------
 
     /**
      * Return an [Option] of the given fragment.
@@ -673,7 +554,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public fun maybeOf(switch: String): Fragment = Fragment(maybe(super.of(switch) as Switch))
 
-    // ------------------------------ repetitions ------------------------------
+    // ------------------------------ repetition factories ------------------------------
 
     /**
      * Returns a [Repetition] of the given fragment.
@@ -697,7 +578,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
         return Fragment(multiple(super.of(switch) as Switch))
     }
 
-    // ------------------------------ optional repetitions ------------------------------
+    // ------------------------------ optional repetition factories ------------------------------
 
     /**
      * Returns an optional repetition of the given fragment.
@@ -719,7 +600,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
      */
     public fun anyOf(switch: String): Fragment = Fragment(any(super.of(switch) as Switch))
 
-    // ------------------------------ junctions ------------------------------
+    // ------------------------------ junction factories ------------------------------
 
     /**
      * Returns a junction of the two fragments.
@@ -760,7 +641,7 @@ public sealed class LexerParserDefinition : ParserDefinition() {
         return Fragment(TypeUnsafeJunction(Text(option2), root))
     }
 
-    // ------------------------------ sequences ------------------------------
+    // ------------------------------ sequence factories ------------------------------
 
     /**
      * Returns a sequence containing the two fragments
@@ -823,22 +704,4 @@ public sealed class LexerParserDefinition : ParserDefinition() {
                     && takeLast(length - 1).all { it satisfies modeNamePart }
         }
     }
-}
-
-/**
- * Defines a scope where a [NameableLexerParser] that does not take an argument can be defined.
- */
-public class NullaryLexerParserDefinition private constructor(
-    internal val lexerless: NullaryLexerlessParserDefinition
-) : LexerParserDefinition(), NullaryParserDefinition by lexerless {
-    internal constructor() : this(NullaryLexerlessParserDefinition())
-}
-
-/**
- * Defines a scope where a [NameableLexerParser] that takes one argument can be defined.
- */
-public class UnaryLexerParserDefinition<in ArgumentT> private constructor(
-    internal val lexerless: UnaryLexerlessParserDefinition<@UnsafeVariance ArgumentT>
-) : LexerParserDefinition(), UnaryParserDefinition<@UnsafeVariance ArgumentT> by lexerless {
-    internal constructor() : this(UnaryLexerlessParserDefinition())
 }

@@ -4,10 +4,46 @@ import io.github.aeckar.parsing.utils.*
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.io.RawSource
-import kotlin.properties.ReadOnlyProperty
-import kotlin.reflect.KProperty
 
-// ------------------------------ generic parsers ------------------------------
+/**
+ * Evaluates an input to some value of type [R].
+ */
+public sealed interface Operator<R>
+
+/**
+ * Evaluates [input] to some value by in.
+ *
+ * Invokes the listeners of this parser on the nodes of a
+ * completed [abstract syntax tree][Parser.parse] representing the given input.
+ */
+public operator fun <R> Operator<R>.invoke(input: String): R {
+    val parser = this as Parser
+    parser.parse(input)?.invokeListeners()
+    return parser.returnValue!!().unsafeCast()
+}
+
+/**
+ * Evaluates [input] to some value.
+ *
+ * Invokes the listeners of this parser on the nodes of a
+ * completed [abstract syntax tree][Parser.parse] representing the given input.
+ */
+public operator fun <R> Operator<R>.invoke(input: RawSource): R {
+    val parser = this as Parser
+    parser.parse(input)?.invokeListeners()
+    return parser.returnValue!!().unsafeCast()
+}
+
+/**
+ * An operator capable of evaluating a list of tokens.
+ */
+public sealed interface LexerOperator<R>
+
+public operator fun <R> LexerOperator<R>.invoke(input: List<Token>): R {
+    val parser = this as LexerParser
+    parser.parse(input)?.invokeListeners()
+    return parser.returnValue!!().unsafeCast()
+}
 
 /**
  * Performs actions according to a formal grammar.
@@ -15,229 +51,95 @@ import kotlin.reflect.KProperty
  * Delegating an instance of this class to a property produces a named wrapper of that instance,
  * enabling the [import][ParserDefinition.import] of named symbols from a parser.
  */
-public sealed interface Parser {
+public sealed class Parser(def: ParserDefinition) {
+    internal val parserSymbols = def.compileSymbols()
+    internal val returnValue: (() -> Any?)? = def.returnValueDelegate.field
+    internal val listenersMap = def.listeners
+
     /**
      * An immutable map of all symbols defined in this parser.
      */
-    public val symbols: Map<String, NameableSymbol<*>>
+    public abstract val symbols: Map<String, NameableSymbol<*>>
 
     /**
      * An immutable map of all listeners defined in this parser.
      */
-    public val listeners: Map<String, SymbolListener>
+    public val listeners: Map<String, ParserDefinition.Listener<*>> by lazy { listenersMap.toImmutableMap() }
+
+    private val start = def.startDelegate.field
+
+    init {
+        def.inversionSymbols.forEach { it.origin = this }
+        debug { "Defined with parser symbols $parserSymbols" }
+    }
 
     /**
      * Returns the root node of the abstract syntax tree representing the input, if one exists.
      */
-    public fun parse(input: String): SyntaxTreeNode<*>?
+    public abstract fun parse(input: String): SyntaxTreeNode<*>?
 
     /**
-     * See [parse] for details.
+     * Returns the root node of the abstract syntax tree representing the input, if one exists.
      */
-    public fun parse(input: RawSource): SyntaxTreeNode<*>?
-}
+    public abstract fun parse(input: RawSource): SyntaxTreeNode<*>?
 
-internal fun Parser.resolveSymbols(): Map<String, NameableSymbol<*>> = when (this) {
-    is NameableLexerlessParser -> parserSymbols
-    is NameableLexerParser -> parserSymbols
-    is NamedNullaryLexerlessParser -> unnamed.parserSymbols
-    is NamedUnaryLexerlessParser<*> -> unnamed.parserSymbols
-    is NamedNullaryLexerParser -> unnamed.parserSymbols
-    is NamedUnaryLexerParser<*> -> unnamed.parserSymbols
-}
+    internal fun resolveStart(): Symbol {
+        if (start != null) {
+            return start
+        }
+        throw MalformedParserException("Start symbol is undefined")
+    }
 
-internal fun Parser.resolveListeners() = when (this) {
-    is NameableLexerlessParser -> symbolListeners
-    is NameableLexerParser -> symbolListeners
-    is NamedNullaryLexerlessParser -> unnamed.symbolListeners
-    is NamedUnaryLexerlessParser<*> -> unnamed.symbolListeners
-    is NamedNullaryLexerParser -> unnamed.symbolListeners
-    is NamedUnaryLexerParser<*> -> unnamed.symbolListeners
-}
-
-/**
- * @throws MalformedParserException always
- */
-private fun Parser.raiseUndefinedStart(): Nothing {
-    val name = if (this is Named) name  else ""
-    throw MalformedParserException("Start symbol for parser '$name' is undefined")
-}
-
-/**
- * A nameable parser.
- */
-public sealed class NameableParser(def: ParserDefinition): Nameable, Parser {
-    internal val id = def.hashCode()
-    internal val parserSymbols = def.compileSymbols()
-    internal val symbolListeners = def.resolveListeners()
-
-    init {
-        debug { "Defined with parser symbols $parserSymbols" }
+    @PublishedApi
+    internal fun SyntaxTreeNode<*>.invokeListeners(): SyntaxTreeNode<*> = onEach {
+        listenersMap[it.toString()]
+            ?.unsafeCast<ParserDefinition.Listener<Symbol>>()
+            ?.apply { it.unsafeCast<SyntaxTreeNode<Symbol>>()() }
     }
 }
 
-/**
- * A named parser.
- */
-public sealed class NamedParser(internal val unnamed: NameableParser) : Named, Parser {
-    internal fun debugNamed(unnamed: NameableParser) {
-        debug { "Named parser ${unnamed.id.toString(radix = 16)}" }
-    }
-}
+///**
+// * Invokes the listeners of this parser on the nodes of a
+// * completed [abstract syntax tree][Parser.parse] representing the given input.
+// *
+// * @return the root node of the resulting AST
+// */
 
-// ------------------------------ nullary parsers ------------------------------
+
 
 /**
- * A parser that does not take an argument.
+ * A parser that parses its input directly.
  */
-public sealed interface NullaryParser : Parser {
-    abstract override val listeners: Map<String, NullarySymbolListener<*>>
-}
-
-/**
- * Invokes the listeners of this parser on the nodes of a
- * completed [abstract syntax tree][Parser.parse] representing the given input.
- *
- * @return the root node of the resulting AST
- */
-public operator fun NullaryParser.invoke(input: String): SyntaxTreeNode<*>? {
-    val ast = parse(input)
-    ast?.forEach(::invokeListener)
-    return ast
-}
-
-/**
- * See [NullaryParser.invoke] for details.
- */
-public operator fun NullaryParser.invoke(input: RawSource): SyntaxTreeNode<*>? {
-    val ast = parse(input)
-    ast?.forEach(::invokeListener)
-    return ast
-}
-
-private fun NullaryParser.invokeListener(node: SyntaxTreeNode<*>) {
-    listeners[node.toString()]
-        ?.unsafeCast<NullarySymbolListener<Symbol>>()
-        ?.apply { node.unsafeCast<SyntaxTreeNode<Symbol>>()() }
-}
-
-/**
- * A named nullary parser.
- */
-public sealed class NamedNullaryParser(
-    unnamed: NameableParser
-) : NamedParser(unnamed), NullaryParser
-
-// ------------------------------ lexerless parsers ------------------------------
-
-/**
- * A parser that creates an abstract syntax tree directly from its input.
- */
-public sealed interface LexerlessParser : Parser
-
-internal fun LexerlessParser.resolveSkip() = when (this) {
-    is NameableLexerlessParser -> skip
-    is NamedNullaryLexerlessParser -> (unnamed as NullaryLexerlessParser).skip
-    is NamedUnaryLexerlessParser<*> -> (unnamed as UnaryLexerlessParser<*>).skip
-}
-
-/**
- * A nameable lexerless parser.
- */
-public sealed class NameableLexerlessParser(def: LexerlessParserDefinition) : NameableParser(def), LexerlessParser {
+public open class LexerlessParser internal constructor(def: LexerlessParserDefinition) : Parser(def) {
     internal val skip = def.skipDelegate.field
 
-    private val start = def.startDelegate.field
+    override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
-    final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
-
-    init {
-        def.inversionSymbols.forEach { it.origin = this }
-    }
-
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.inputIterator())
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.inputIterator())
-    final override fun toString(): String = "Parser ${id.toString(radix = 16)}"
+    override fun parse(input: String): SyntaxTreeNode<*>? = parse(input.inputIterator())
+    override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(input.inputIterator())
 
     private fun parse(input: InputIterator<*, *>): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input, skip))
+        return resolveStart().match(ParsingAttempt(input, skip))
     }
 }
 
 /**
- * A lexerless parser that takes no arguments.
+ * A parser that parses its input directly, and is capable of evaluating it to some instance of type [R].
  */
-public class LexerlessParser internal constructor(
-    def: NullaryLexerlessParserDefinition
-) : NameableLexerlessParser(def), NullaryParser {
-    override val listeners: Map<String, NullarySymbolListener<*>>
-        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
-
-    override fun provideDelegate(
-        thisRef: Any?,
-        property: KProperty<*>
-    ): ReadOnlyProperty<Any?, NamedNullaryLexerlessParser> {
-        return NamedNullaryLexerlessParser(property.name, this).readOnlyProperty()
-    }
-}
-
-/**
- * A named lexerless parser that does not take an argument.
- */
-public class NamedLexerlessParser internal constructor(
-    override val name: String,
-    unnamed: NullaryLexerlessParser
-) : NamedNullaryParser(unnamed), NullaryParser by unnamed, LexerlessParser {
-    init {
-        debugNamed(unnamed)
-    }
-
-    override fun toString(): String = name
-}
-
-// ------------------------------ lexer-parsers ------------------------------
-
-/**
- * Transforms an input into a list of [Token]s.
- */
-public sealed interface Lexer {
-    /**
-     * Returns a list of tokens representing the input.
-     */
-    public fun tokenize(input: String): List<Token>
-
-    /**
-     * See [tokenize] for details.
-     */
-    public fun tokenize(input: RawSource): List<Token>
-}
+public class LexerlessParserOperator<R> internal constructor(
+    def: LexerlessParserDefinition
+) : LexerlessParser(def), Operator<R>
 
 /**
  * A parser that tokenizes its input before parsing.
  */
-public sealed interface LexerParser : Lexer, Parser {
-    /**
-     * See [parse] for details.
-     */
-    public fun parse(input: List<Token>): SyntaxTreeNode<*>?
-}
-
-/**
- * A nameable lexer-parser.
- */
-public sealed class NameableLexerParser(def: LexerParserDefinition) : NameableParser(def), LexerParser {
+public open class LexerParser internal constructor(def: LexerParserDefinition) : Parser(def) {
     private val skip = def.skip.asSequence().map { it.name }.toImmutableSet()   // Copy ASAP
 
     private val lexerModes: Map<String, List<NamedSymbol<LexerSymbol>>> = def.lexerModes
-    private val start = def.startDelegate.field
     private val recovery = (def.recoveryDelegate.field as? ParserComponent)?.unwrap()
 
-    init {
-        def.inversionSymbols.forEach { it.origin = this }
-        debug { "Parser $id: Defined with lexer modes $lexerModes" }
-    }
-
-    final override val symbols: Map<String, NameableSymbol<*>> by lazy {
+    override val symbols: Map<String, NameableSymbol<*>> by lazy {
         buildMap(parserSymbols.size + lexerModes.values.sumOf { it.size }) {
             putAll(parserSymbols)
             for (mode in lexerModes.values) {
@@ -246,18 +148,29 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : NameablePa
         }
     }
 
-    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
-    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
-
-    final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
-        return (start ?: raiseUndefinedStart()).match(ParsingAttempt(input.inputIterator(), null))
+    init {
+        debug { "Parser Defined with lexer modes $lexerModes" }
     }
 
-    // Defensive copy
-    final override fun tokenize(input: String): List<Token> = tokenize(input.inputIterator()).toList()
-    final override fun tokenize(input: RawSource): List<Token> = tokenize(input.inputIterator()).toList()
+    /**
+     * Returns the root node of the abstract syntax tree representing the input, if one exists.
+     */
+    public fun parse(input: List<Token>): SyntaxTreeNode<*>? {  // TODO test to remove warning
+        return resolveStart().match(ParsingAttempt(input.inputIterator(), null))
+    }
 
-    final override fun toString(): String = "Lexer-parser ${id.toString(radix = 16)}"
+    /**
+     * Returns a list of tokens representing the input.
+     */
+    public fun tokenize(input: String): List<Token> = tokenize(input.inputIterator()).toList()
+
+    /**
+     * Returns a list of tokens representing the input.
+     */
+    public fun tokenize(input: RawSource): List<Token> = tokenize(input.inputIterator()).toList()
+
+    override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
+    override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input.inputIterator()))
 
     private fun tokenize(input: InputIterator<*, *>): List<Token> {
         val metadata = ParsingAttempt(input, null)
@@ -290,30 +203,8 @@ public sealed class NameableLexerParser(def: LexerParserDefinition) : NameablePa
 }
 
 /**
- * A [NameableLexerParser] that does not take an argument.
+ * A parser that tokenizes its input before parsing, and is capable of evaluating it to an instance of type [R].
  */
-public class LexerParser internal constructor(
-    def: NullaryLexerParserDefinition
-) : NameableLexerParser(def), NullaryParser, LexerParser {
-    override val listeners: Map<String, NullarySymbolListener<*>>
-        by lazy { symbolListeners.toImmutableMap().unsafeCast() }
-
-    override fun provideDelegate(
-        thisRef: Any?,
-        property: KProperty<*>
-    ): ReadOnlyProperty<Any?, NamedNullaryLexerParser> {
-        return NamedNullaryLexerParser(property.name, this).readOnlyProperty()
-    }
-}
-
-/**
- * A named [NameableLexerParser] that does not take an argument.
- */
-public class NamedLexerParser internal constructor(
-    override val name: String,
-    unnamed: NullaryLexerParser
-) : NamedNullaryParser(unnamed), NullaryParser, LexerParser by unnamed {
-    override val listeners: Map<String, NullarySymbolListener<*>> get() = unnamed.listeners.unsafeCast()
-
-    override fun toString(): String = name
-}
+public class LexerParserOperator<R> internal constructor(
+    def: LexerParserDefinition
+) : LexerParser(def), LexerOperator<R>

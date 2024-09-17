@@ -61,7 +61,13 @@ public class BooleanList : NumberList, Iterable<Boolean> {
         buffer[size++] = element
     }
 
-    override fun iterator(): BooleanIterator = buffer.iterator()
+    override fun iterator(): BooleanIterator = object : BooleanIterator() {
+        var cursor = 0
+
+        override fun hasNext() = cursor < size
+        override fun nextBoolean() = buffer[cursor++]
+    }
+
     override fun toString(): String = buffer.asSequence().take(size).joinToString(prefix = "[", postfix = "]")
 }
 
@@ -112,7 +118,13 @@ public class IntList : NumberList, Iterable<Int> {
         buffer[size++] = element
     }
 
-    override fun iterator(): IntIterator = buffer.iterator()
+    override fun iterator(): IntIterator = object : IntIterator() {
+        var cursor = 0
+
+        override fun hasNext() = cursor < size
+        override fun nextInt() = buffer[cursor++]
+    }
+
     override fun toString(): String = buffer.asSequence().take(size).joinToString(prefix = "[", postfix = "]")
 }
 
@@ -163,7 +175,13 @@ public class LongList : NumberList, Iterable<Long> {
         buffer[size++] = element
     }
 
-    override fun iterator(): LongIterator = buffer.iterator()
+    override fun iterator(): LongIterator = object : LongIterator() {
+        var cursor = 0
+
+        override fun hasNext() = cursor < size
+        override fun nextLong() = buffer[cursor++]
+    }
+
     override fun toString(): String = buffer.asSequence().take(size).joinToString(prefix = "[", postfix = "]")
 }
 
@@ -214,6 +232,12 @@ public class DoubleList : NumberList, Iterable<Double> {
         buffer[size++] = element
     }
 
-    override fun iterator(): DoubleIterator = buffer.iterator()
+    override fun iterator(): DoubleIterator = object : DoubleIterator() {
+        var cursor = 0
+
+        override fun hasNext() = cursor < size
+        override fun nextDouble() = buffer[cursor++]
+    }
+
     override fun toString(): String = buffer.asSequence().take(size).joinToString(prefix = "[", postfix = "]")
 }

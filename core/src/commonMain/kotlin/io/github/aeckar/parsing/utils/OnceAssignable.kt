@@ -7,15 +7,15 @@ import kotlin.reflect.KProperty
  * A delegate ensuring that a property is only assigned a value once.
  * @param raise thrown when the above contract is violated
  */
-internal class OnceAssignable<T : Any, X : Throwable>(
-    private val raise: (String) -> X
+internal class OnceAssignable<T : Any>(
+    private val raise: (String) -> Throwable
 ) : ReadWriteProperty<Any?, T> {
     var field: T? = null
         private set
 
     private lateinit var name: String
 
-    operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): OnceAssignable<T, X> {
+    operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): OnceAssignable<T> {
         name = property.name
         return this
     }

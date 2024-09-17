@@ -3,7 +3,7 @@ package io.github.aeckar.parsing.typesafe
 
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
-#define($nodeFragileUnsafeCast)fragileUnsafeCast<${identifier}Node>()#end
+#define($nodeUnsafeCast)unsafeCast<${identifier}Node>()#end
 #define($nodeReceiver)SyntaxTreeNode<$identifier$n<#typeArguments("E" "")>>#end
 #define($typeSafeTuple)TypeSafeTuple$n<#typeArguments("SyntaxTreeNode<E" ">")>#end
 #macro(classTypeArguments $letter $suffix)#foreach($_ in [1..$n])$letter$foreach.count$suffix, #end#end
@@ -17,7 +17,6 @@ import io.github.aeckar.parsing.SyntaxTreeNode
 import io.github.aeckar.parsing.TypeUnsafe$identifier
 import io.github.aeckar.parsing.Text
 import io.github.aeckar.parsing.utils.unsafeCast
-import io.github.aeckar.parsing.utils.fragileUnsafeCast
 
 /**
 * A #if($identifier == "Junction")junction#else#evaluate("sequence")#end with $n components.
@@ -52,7 +51,7 @@ public class $identifier$n<#classTypeArguments("E" " : Symbol")> internal constr
  * If the $ordinal option is matched, invokes the supplied lambda, else does nothing.
  */
 public inline fun <#classTypeArguments('E' ' : Symbol')> ${nodeReceiver}.on$capitalOrdinal(action: SyntaxTreeNode<E$foreach.count>.() -> Unit) {
-    val node = ${nodeFragileUnsafeCast}
+    val node = ${nodeUnsafeCast}
     if (node.matchOrdinal == $foreach.count) {
         action(node.children.single().unsafeCast())
     }
@@ -86,6 +85,6 @@ public class TypeSafeTuple$n<#classTypeArguments("E" "")> internal constructor(
 "/**
  * The $ordinal match made by the symbol emitting this node.
  */
-public inline fun <#classTypeArguments('E' ' : Symbol')> $nodeReceiver.$ordinal(action: SyntaxTreeNode<E$foreach.count>.() -> Unit): Unit = action(${nodeFragileUnsafeCast}.branches[$foreach.index].unsafeCast())
+public inline fun <#classTypeArguments('E' ' : Symbol')> $nodeReceiver.$ordinal(action: SyntaxTreeNode<E$foreach.count>.() -> Unit): Unit = action(${nodeUnsafeCast}.branches[$foreach.index].unsafeCast())
 
 ")#end

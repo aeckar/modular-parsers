@@ -15,6 +15,6 @@ internal class ParsingAttempt(
     /**
      * The stack of lexer modes that are currently active.
      */
-    var modeStack = mutableListOf("")
+    var modeStack = mutableListOf(DEFAULT_MODE_NAME)
 }
 
