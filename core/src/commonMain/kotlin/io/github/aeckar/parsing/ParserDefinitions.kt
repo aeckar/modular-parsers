@@ -11,17 +11,127 @@ import kotlin.reflect.KProperty
 
 internal const val DEFAULT_MODE_NAME = ""
 
-// ------------------------------------ abstract parser definitions ------------------------------------
+/*
+    How to "inherit" multiple classes:
+        - Inheritance by composition
+        - Extension functions for public-facing functions
+        - Internal functions in base class for internal functions
+        - Abstract properties with default behavior throwing an exception
+ */
+
+/*
+    OperatorDefinition (i)
+
+    ParserDefinition (sc)
+        LexerlessParserDefinition (oc)
+            LexerlessParserOperatorDefinition : OperatorDefinition (c)
+        LexerParserDefinition (oc)
+            LexerParserOperatorDefinition : OperatorDefinition (c)
+ */
+
+/*
+    ...Properties = Component of other classes (inheritance by composition)
+    ...Descriptor = Type of a specific return value
+ */
+
+// ------------------------------------ operator definitions ------------------------------------
 
 /**
- * Defines a scope where [Parser] rules and symbolListeners can be defined.
+ * Defines the configuration of an [Operator].
  *
- * Each listener is invoked from a completed [abstract syntax tree][Parser.parse] in a top-down, left-to-right fashion.
+ * @param R the type of the value returned by the operator being defined.
+ */
+public sealed interface OperatorDefinition<R>
+
+/**
+ * Signals that this operator returns an instance of [R], as returned by [lazyValue].
+ */
+public fun <R> OperatorDefinition<R>.returns(lazyValue: () -> R) {
+    val operator = when (this) {
+        is LexerlessParserOperatorDefinition<*> -> operator
+        is LexerParserOperatorDefinition<*> -> operator
+    }
+    try {
+        operator.returnValue = lazyValue
+    } catch (e: IllegalStateException) {
+        throw MalformedParserException("Ambiguous return value", e)
+    }
+}
+
+internal class OperatorProperties {
+    internal val returnValueDelegate = OnceAssignable<() -> Any?>(::IllegalStateException)
+    internal var returnValue by returnValueDelegate
+    internal val listeners = mutableMapOf<String, Listener<*>>()
+
+    internal fun ensureUndefinedListener(name: String) {
+        if (name in listeners) {
+            throw MalformedParserException("Listener for symbol '$name' defined more than once")
+        }
+    }
+
+    /**
+     * Ensures that the specified extension listener can be created.
+     * @throws MalformedParserException the assertion fails
+     */
+    internal fun ensureExtensionCandidate(parser: Parser, name: String) {
+        ensureUndefinedListener(name)
+        if (name !in parser.listenersMap) {
+            throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
+        }
+    }
+}
+
+/**
+ * Defines a combined parser-operator [without a lexer][LexerlessParserOperator].
+ */
+public class LexerlessParserOperatorDefinition<R> internal constructor(
+) : LexerlessParserDefinition(), OperatorDefinition<R> {
+    override val operator = OperatorProperties()
+
+    private val def inline get() = this@LexerlessParserOperatorDefinition
+
+    public override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: Listener<MatchT>
+    ) {
+        with(def) { this@listener.listener(action) }
+    }
+
+    public override fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
+        action: Listener<MatchT>
+    ) {
+        with(def) { this@extendsListener.extendsListener(action) }
+    }
+}
+
+/**
+ * Defines a combined parser-operator [with a lexer][LexerParserOperator].
+ */
+public class LexerParserOperatorDefinition<R> internal constructor() : LexerParserDefinition(), OperatorDefinition<R> {
+    override val operator = OperatorProperties()
+
+    private val def inline get() = this@LexerParserOperatorDefinition
+
+    public override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: Listener<MatchT>
+    ) {
+        with(def) { this@listener.listener(action) }
+    }
+
+    public override fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
+        action: Listener<MatchT>
+    ) {
+        with(def) { this@extendsListener.extendsListener(action) }
+    }
+}
+
+// ------------------------------------ parser definitions ------------------------------------
+
+/**
+ * Defines the configuration of a [Parser].
  */
 @ListenerDsl
 public sealed class ParserDefinition {
     internal val startDelegate = OnceAssignable<Symbol>(::MalformedParserException)
-    internal val returnValueDelegate = OnceAssignable<() -> Any?>(::IllegalStateException)
 
     /**
      * The principal symbol to be matched.
@@ -32,10 +142,12 @@ public sealed class ParserDefinition {
      */
     public var start: Symbol by startDelegate
 
-    internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()      // Not including imports, implicits
+    /**
+     * Does not include implicit nor imported symbols.
+     */
+    internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
+
     internal val inversionSymbols = mutableSetOf<Inversion>()
-    internal val listeners = mutableMapOf<String, Listener<*>>()
-    internal var returnValue by returnValueDelegate
 
     private val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
     private val endSymbol = End()
@@ -50,30 +162,44 @@ public sealed class ParserDefinition {
         return allSymbols
     }
 
-    // ------------------------------ parser-operators ------------------------------
+    // ------------------------------ operator-exclusive ------------------------------
+
+    internal open val operator: OperatorProperties
+        get() = throw UnsupportedOperationException("Operator properties undefined for non-operator parsers")
 
     /**
-     * Specifies the type, [R], returned when the parser
-     * created by the definition returning this is invoked.
-     * @see Operator
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol, the listener is invoked.
      */
-    public class ReturnDescriptor<R> private constructor() {
-        internal companion object {
-            val INSTANCE: ReturnDescriptor<*> = ReturnDescriptor<Nothing>()
-        }
-    }
+    internal open infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+        action: Listener<MatchT>
+    ) {
+        operator.ensureUndefinedListener(name)
+        operator.listeners[name] = action
+    }   // Cannot make extension until context parameters are available
 
     /**
-     * Returns a [ReturnDescriptor], which if returned by this parser definition
-     * will create a [Operator].
+     * Assigns the supplied listener to the symbol.
+     *
+     * Whenever a match is made to this symbol,
+     * the listener previously defined for this symbol is invoked before this one is.
      */
-    public fun <R> returns(lazyValue: () -> R): ReturnDescriptor<R> {
-        try {
-            returnValue = lazyValue
-        } catch (e: IllegalStateException) {
-            throw MalformedParserException("Ambiguous return value", e)
+    internal open infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
+        action: Listener<MatchT>
+    ) {
+        val listenersMap = when (origin) {
+            is LexerlessParserOperator<*> -> origin.listenersMap
+            is LexerParserOperator<*> -> origin.listenersMap
+            else -> throw MalformedParserException("Symbol does not originate from a parser-operator.")
         }
-        return ReturnDescriptor.INSTANCE.unsafeCast()
+        operator.ensureExtensionCandidate(origin, name)
+        operator.listeners[name] = Listener {
+            with(listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
+                this@Listener()
+            }
+            with(action) { this@Listener() }
+        }
     }
 
     // ------------------------------ symbol definition & import/export ------------------------------
@@ -181,63 +307,6 @@ public sealed class ParserDefinition {
      */
     public fun sequence(): TypeUnsafeSequence<*> = TypeUnsafeSequence()
 
-    // ------------------------------ listener DSL ------------------------------
-
-    /**
-     * A listener assigned to a symbol that emits the given node.
-     */
-    public fun interface Listener<MatchT : Symbol> {
-        /**
-         * Invokes the lambda that defines the listener of a specific named symbol.
-         */
-        public operator fun SyntaxTreeNode<MatchT>.invoke()
-    }
-
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol, the listener is invoked.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(action: Listener<MatchT>) {
-        ensureUndefinedListener(name)
-        listeners[name] = action
-    }
-
-    /**
-     * Assigns the supplied listener to the symbol.
-     *
-     * Whenever a match is made to this symbol,
-     * the listener previously defined for this symbol is invoked before this one is.
-     */
-    public infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
-        action: Listener<MatchT>
-    ) {
-        origin.ensureExtensionCandidate(name)
-        listeners[name] = Listener {
-            with(origin.listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
-                this@Listener()
-            }
-            with(action) { this@Listener() }
-        }
-    }
-
-    private fun ensureUndefinedListener(name: String) {
-        if (name in listeners) {
-            throw MalformedParserException("Listener for symbol '$name' defined more than once")
-        }
-    }
-
-    /**
-     * Ensures that the specified extension listener can be created.
-     * @throws MalformedParserException the assertion fails
-     */
-    private fun Parser.ensureExtensionCandidate(name: String) {
-        ensureUndefinedListener(name)
-        if (name !in listenersMap) {
-            throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
-        }
-    }
-
     // ------------------------------ other symbol factories ------------------------------
 
     /**
@@ -314,9 +383,9 @@ public sealed class ParserDefinition {
 }
 
 /**
- * Defines a scope where a [Parser] without a lexer can be defined.
+ * Defines a [Parser] without a lexer.
  */
-public class LexerlessParserDefinition internal constructor() : ParserDefinition() {
+public open class LexerlessParserDefinition internal constructor() : ParserDefinition() {
     internal val skipDelegate = OnceAssignable<Symbol>(::MalformedParserException)
 
     /**
@@ -419,9 +488,9 @@ public class LexerlessParserDefinition internal constructor() : ParserDefinition
 }
 
 /**
- * Defines a scope where a [LexerParser] can be defined.
+ * Defines a [LexerParser].
  */
-public class LexerParserDefinition internal constructor() : ParserDefinition() {
+public open class LexerParserDefinition internal constructor() : ParserDefinition() {
     internal val recoveryDelegate = OnceAssignable<LexerComponent>(::MalformedParserException)
 
     /**

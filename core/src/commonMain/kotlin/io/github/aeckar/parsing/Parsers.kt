@@ -5,6 +5,27 @@ import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.io.RawSource
 
+/*
+    Operator (i)
+        LexerOperator (i)
+
+    Parser (i)
+        NameableParser (a)
+            TODO logger
+        LexerlessParser (i)
+            NameableLexerlessParser : NameableParser (oc)
+                NameableLexerlessOperator : Operator (c)
+        LexerParser (i)
+            NameableLexerParser : NameableParser (oc)
+                NameableLexerOperator : LexerOperator (c)
+        NamedParser : Named (i)
+            TODO logger
+            NamedLexerlessParser : LexerlessParser (oc)
+                NamedLexerlessOperator : Operator (c)
+            NamedLexerParser : LexerParser (oc)
+                NamedLexerOperator : LexerOperator (c)
+ */
+
 /**
  * Evaluates an input to some value of type [R].
  */

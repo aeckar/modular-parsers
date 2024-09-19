@@ -86,7 +86,7 @@ class ParserTest {
                 operands += substring.toDouble()
             }
 
-            returns { operands.last }   // TODO take out of regular parser def API
+            returns { operands.last }
         }
         println("\n" + math("(1 + 2) * 3"))
     }
