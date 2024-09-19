@@ -30,7 +30,7 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
     @PublishedApi
     internal var next: Self? = null
 
-    private var last: Self? = null
+    internal var last: Self? = null
 
     /**
      * Returns the next node in the linked list.
@@ -70,23 +70,6 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
         node.last = last
         node.next = this as Self
         last = node
-    }
-
-    /**
-     * Returns an iterator over every element in this linked list, up to and including this node.
-     */
-    public fun reversed(): Iterable<Self> = Iterable {
-        object : Iterator<Self> {
-            var cursor: Self? = this@ListNode as Self
-
-            override fun hasNext() = cursor != null
-
-            override fun next(): Self {
-                val cursor = cursor ?: throw NoSuchElementException("Node is head")
-                this.cursor = cursor.last
-                return cursor
-            }
-        }
     }
 
     /**
@@ -150,6 +133,23 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
 }
 
 /**
+ * Returns an iterator over every element in this linked list, up to and including this node.
+ */
+public fun <Self : ListNode<Self>> Self?.reversed(): Iterable<Self> = Iterable {
+    object : Iterator<Self> {
+        var cursor: Self? = this@reversed as Self
+
+        override fun hasNext() = cursor != null
+
+        override fun next(): Self {
+            val cursor = cursor ?: throw NoSuchElementException("Node is head")
+            this.cursor = cursor.last
+            return cursor
+        }
+    }
+}
+
+/**
  * Returns a list containing all nodes in this linked list.
  *
  * The mutability of the returned list cannot be guaranteed.
@@ -157,9 +157,10 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
  */
 public fun <Self: ListNode<Self>> Self?.toList(): List<Self> {
     this ?: return listOf()
+    val elements = this
     return mutableListOf<Self>().apply {
-        addAll(reversed())
+        addAll(elements.reversed())
         reverse()
-        addAll(next())
+        next?.let { addAll(it) }
     }
 }

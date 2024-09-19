@@ -27,7 +27,7 @@ class ParserTest {
             start = expression
             skip = multiple(" ")  // Prefer multiple to any for skip symbols
         }
-        println(math.parse("(1 + 2) * 3")?.treeString())
+        println("\n" + math.parse("(1 + 2) * 3")?.treeString())
         // from source...
     }
 
@@ -47,8 +47,8 @@ class ParserTest {
             val multiplication by operation('*')
             val division by operation('/')
 
-            val number by any(DIGIT) + '.' + multiple(DIGIT) or
-                    multiple(DIGIT) + any('.') + any(DIGIT)
+            //val number by any(DIGIT) + maybe('.') + any(DIGIT) not '.'
+            val number by any(DIGIT) + maybe('.') + any(DIGIT)
 
             // ---- configuration ----
             expression.actual = '(' + expression + ')' or
@@ -65,6 +65,7 @@ class ParserTest {
             val operands = DoubleList()
 
             // ---- listeners ----
+
             addition listener {
                 operands += operands.removeLast() + operands.removeLast()
             }
@@ -85,10 +86,9 @@ class ParserTest {
                 operands += substring.toDouble()
             }
 
-            returns { operands.last }
+            returns { operands.last }   // TODO take out of regular parser def API
         }
-        println(math("(1 + 2) * 3"))
-        // from source...
+        println("\n" + math("(1 + 2) * 3"))
     }
 
     @Test
@@ -96,7 +96,7 @@ class ParserTest {
         val ebnf = parser {
 
         }
-        println(ebnf.parse("(1 + 2) * 3")?.treeString())
+        println("\n" + ebnf.parse("(1 + 2) * 3")?.treeString())
         // from source...
     }
 }
