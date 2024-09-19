@@ -12,14 +12,7 @@ import kotlin.reflect.KProperty
 internal const val DEFAULT_MODE_NAME = ""
 
 /*
-    How to "inherit" multiple classes:
-        - Inheritance by composition
-        - Extension functions for public-facing functions
-        - Internal functions in base class for internal functions
-        - Abstract properties with default behavior throwing an exception
- */
-
-/*
+    ---- class hierarchy ----
     OperatorDefinition (i)
 
     ParserDefinition (sc)
@@ -27,12 +20,28 @@ internal const val DEFAULT_MODE_NAME = ""
             LexerlessParserOperatorDefinition : OperatorDefinition (c)
         LexerParserDefinition (oc)
             LexerParserOperatorDefinition : OperatorDefinition (c)
+
+    ---- naming scheme ----
+    class ...Properties = Component of other classes (inheritance by composition)
+    class ...Descriptor = Type of a specific return value
+    fun   raise...      = Always throws unrecoverable exception
+
+    ---- notes ----
+    The logic of operators should remain separate from those of the various parser (definition) types,
+    except in their property classes.
+
+        How to "inherit" multiple classes:
+        - Inheritance by composition
+        - Extension functions for public-facing functions
+        - Internal functions in base class for internal functions
+        - Abstract properties with default behavior throwing an exception
+
+    It's a bit trickier with a nameable/named dichotomy...
  */
 
-/*
-    ...Properties = Component of other classes (inheritance by composition)
-    ...Descriptor = Type of a specific return value
- */
+internal fun raiseNonOperator(): Nothing {
+    throw UnsupportedOperationException("Operator properties unsupported for non-operator parsers")
+}
 
 // ------------------------------------ operator definitions ------------------------------------
 
@@ -47,19 +56,17 @@ public sealed interface OperatorDefinition<R>
  * Signals that this operator returns an instance of [R], as returned by [lazyValue].
  */
 public fun <R> OperatorDefinition<R>.returns(lazyValue: () -> R) {
-    val operator = when (this) {
-        is LexerlessParserOperatorDefinition<*> -> operator
-        is LexerParserOperatorDefinition<*> -> operator
-    }
     try {
-        operator.returnValue = lazyValue
+        (this as ParserDefinition).operator.returnValue = lazyValue.unsafeCast()
     } catch (e: IllegalStateException) {
         throw MalformedParserException("Ambiguous return value", e)
     }
 }
 
-internal class OperatorProperties {
-    internal val returnValueDelegate = OnceAssignable<() -> Any?>(::IllegalStateException)
+// ------------------------------------ parser-operator definitions ------------------------------------
+
+internal class OperatorDefinitionProperties<R> {
+    internal val returnValueDelegate = OnceAssignable<() -> R>(::IllegalStateException)
     internal var returnValue by returnValueDelegate
     internal val listeners = mutableMapOf<String, Listener<*>>()
 
@@ -73,20 +80,20 @@ internal class OperatorProperties {
      * Ensures that the specified extension listener can be created.
      * @throws MalformedParserException the assertion fails
      */
-    internal fun ensureExtensionCandidate(parser: Parser, name: String) {
+    internal fun ensureExtensionCandidate(name: String, parser: Parser) {
         ensureUndefinedListener(name)
-        if (name !in parser.listenersMap) {
+        if (name !in parser.operator<Any?>().listenersMap) {
             throw MalformedParserException("Cannot extend undefined listener for symbol '$name'")
         }
     }
 }
 
 /**
- * Defines a combined parser-operator [without a lexer][LexerlessParserOperator].
+ * Defines a combined parser-operator [without a lexer][NameableLexerlessParserOperator].
  */
 public class LexerlessParserOperatorDefinition<R> internal constructor(
 ) : LexerlessParserDefinition(), OperatorDefinition<R> {
-    override val operator = OperatorProperties()
+    override val operator = OperatorDefinitionProperties<R>()
 
     private val def inline get() = this@LexerlessParserOperatorDefinition
 
@@ -104,10 +111,10 @@ public class LexerlessParserOperatorDefinition<R> internal constructor(
 }
 
 /**
- * Defines a combined parser-operator [with a lexer][LexerParserOperator].
+ * Defines a combined parser-operator [with a lexer][NameableLexerParserOperator].
  */
 public class LexerParserOperatorDefinition<R> internal constructor() : LexerParserDefinition(), OperatorDefinition<R> {
-    override val operator = OperatorProperties()
+    override val operator = OperatorDefinitionProperties<R>()
 
     private val def inline get() = this@LexerParserOperatorDefinition
 
@@ -148,6 +155,7 @@ public sealed class ParserDefinition {
     internal val parserSymbols = mutableMapOf<String, NameableSymbol<*>>()
 
     internal val inversionSymbols = mutableSetOf<Inversion>()
+    internal open val operator: OperatorDefinitionProperties<*> get() = raiseNonOperator()
 
     private val implicitSymbols = mutableMapOf<String, NameableSymbol<*>?>()
     private val endSymbol = End()
@@ -164,15 +172,12 @@ public sealed class ParserDefinition {
 
     // ------------------------------ operator-exclusive ------------------------------
 
-    internal open val operator: OperatorProperties
-        get() = throw UnsupportedOperationException("Operator properties undefined for non-operator parsers")
-
     /**
      * Assigns the supplied listener to the symbol.
      *
      * Whenever a match is made to this symbol, the listener is invoked.
      */
-    internal open infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
+    protected open infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: Listener<MatchT>
     ) {
         operator.ensureUndefinedListener(name)
@@ -185,17 +190,14 @@ public sealed class ParserDefinition {
      * Whenever a match is made to this symbol,
      * the listener previously defined for this symbol is invoked before this one is.
      */
-    internal open infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
+    protected open infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
         action: Listener<MatchT>
     ) {
-        val listenersMap = when (origin) {
-            is LexerlessParserOperator<*> -> origin.listenersMap
-            is LexerParserOperator<*> -> origin.listenersMap
-            else -> throw MalformedParserException("Symbol does not originate from a parser-operator.")
-        }
-        operator.ensureExtensionCandidate(origin, name)
-        operator.listeners[name] = Listener {
-            with(listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
+        val def = this@ParserDefinition.operator
+        val operator = origin.operator<Any?>()
+        def.ensureExtensionCandidate(name, origin)
+        operator.listenersMap[name] = Listener {
+            with(operator.listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
                 this@Listener()
             }
             with(action) { this@Listener() }
@@ -294,6 +296,11 @@ public sealed class ParserDefinition {
         }
 
     /**
+     * Returns an [Inversion] of this symbol.
+     */
+    public operator fun NameableSymbol<*>.not(): Inversion = Inversion(this)
+
+    /**
      * Returns a junction that can be defined after being delegated to a property.
      *
      * Because the types of the options are erased, they cannot be accessed within symbolListeners.
@@ -349,11 +356,6 @@ public sealed class ParserDefinition {
      * Returns an optional repetition of the given symbol.
      */
     public fun <QueryT : Symbol> any(query: QueryT): Option<Repetition<QueryT>> = maybe(multiple(query))
-
-    /**
-     * Returns an [Inversion] of this symbol.
-     */
-    public operator fun NameableSymbol<*>.not(): Inversion = Inversion(this)
 
     /**
      * Returns an [End] symbol.
@@ -508,7 +510,8 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
     /**
      * The lexer symbols to be ignored during lexical analysis.
      *
-     * Nodes produced by these symbols will not be present in the list returned by [LexerParser.tokenize].
+     * Nodes produced by these symbols will not be present in the list returned by
+     * [tokenize][LexerParser.tokenize].
      * @throws MalformedParserException this property is left unassigned, or is assigned a value more than once
      */
     public val skip: MutableList<NamedSymbol<LexerSymbol>> = mutableListOf()

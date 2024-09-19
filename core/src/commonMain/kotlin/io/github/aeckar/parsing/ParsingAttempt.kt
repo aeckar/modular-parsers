@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing
 
+import io.github.oshai.kotlinlogging.KLogger
+
 /**
  * Contains important variables related to parsing.
  *
@@ -9,6 +11,7 @@ package io.github.aeckar.parsing
  * For each match to a non-empty substring, the stack grows. During backtracking, it shrinks
  */
 internal class ParsingAttempt(
+    val logger: KLogger,
     val input: InputIterator<*, *>,
     var skip: Symbol?
 ) {

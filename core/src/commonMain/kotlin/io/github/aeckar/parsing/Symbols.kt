@@ -23,33 +23,33 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
 public abstract class Symbol internal constructor(
 ) : ParserComponent() { // Unseal to allow inheritance from type-safe symbols
     protected fun debugUnwrap(wrapped: Symbol) {
-        debug { "Unwrapping symbol: ${wrapped.blue()}" }
+        debugAt { "Unwrapping symbol: ${wrapped.blue()}" }
     }
 
     protected fun debugQuery(query: Symbol) {
-        debug { "Attempting match to: ${query.blue()}" }
+        debugAt { "Attempting match to: ${query.blue()}" }
     }
 
     protected fun debugMatchSuccess(result: SyntaxTreeNode<*>) {
-        debug {
+        debugAt {
             "Match succeeded".greenEmphasis() +
             " (substring = '" + result.substring.withEscapes().yellow() + "')"
         }
     }
 
     protected fun debugMatchSuccess(result: SyntaxTreeNode<*>, lazyReason: () -> String) {
-        debug {
+        debugAt {
             "Match succeeded".greenEmphasis() +
             " (${lazyReason()}, substring = '" + result.substring.withEscapes().yellow() + "')"
         }
     }
 
     protected fun debugMatchFail() {
-        debug { "Match failed".redEmphasis() }
+        debugAt { "Match failed".redEmphasis() }
     }
 
     protected fun debugMatchFail(lazyReason: () -> String ) {
-        debug { "Match failed".redEmphasis() + " (${lazyReason()})" }
+        debugAt { "Match failed".redEmphasis() + " (${lazyReason()})" }
     }
 
     /**
@@ -92,12 +92,12 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
      */
     internal fun align(attempt: ParsingAttempt) {
         attempt.skip?.let {
-            debug { "Attempting match to skip: ".magentaBold() + attempt.skip.toString().blue() }
+            debugAt { "Attempting match to skip: ".magentaBold() + attempt.skip.toString().blue() }
             val previousSkip = attempt.skip
             attempt.skip = null // Prevent infinite recursion
             it.match(attempt)
             attempt.skip = previousSkip
-            debug { "End skip".magentaBold() }
+            debugAt { "End skip".magentaBold() }
         }
     }
 
@@ -115,7 +115,7 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
             debugMatchSuccess(it) { "Previous attempt succeeded" }
             return it.unsafeCast()
         }
-        debug { "Attempting match" }
+        debugAt { "Attempting match" }
         startPos.symbols += this
         attempt.input.save()
         val result = matchNoCache(attempt)
@@ -314,7 +314,6 @@ public class Switch internal constructor(
     }
 }
 
-// TODO add "begin" and "end" messages for parsers during lexing, parsing
 /**
  * A symbol matching another symbol one or more times in a row.
  *
@@ -328,13 +327,13 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         while (subMatch != null) {
             subMatches += subMatch
             if (subMatch.substring.isEmpty()) { // No need to push to fail stack
-                debug { "End matches to query (matched substring is empty)" }
+                debugAt { "End matches to query (matched substring is empty)" }
                 break
             }
             align(attempt)
             subMatch = query.match(attempt).unsafeCast()
         }
-        debug { "Query matched ${subMatches.size} times" }
+        debugAt { "Query matched ${subMatches.size} times" }
         input.revert()
         if (subMatches.isEmpty()) {
             return null
@@ -371,7 +370,7 @@ public class Inversion(
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debug { "Attempting match to any not of: " + antiquery.blue() }
+        debugAt { "Attempting match to any not of: " + antiquery.blue() }
         return origin.parserSymbols.values
             .asSequence()
             .mapNotNull {
@@ -432,7 +431,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         val firstQuery = components.first()
         if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.input.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
-            debug { "Left-recursion found for non-junction query: $firstQuery" }
+            debugAt { "Left-recursion found for non-junction query: $firstQuery" }
             input.removeSave()
             return null
         }
@@ -475,7 +474,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
  */
 public class End : SimpleSymbol<End>() {  // Doesn't make sense to cache this
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debug { "Matching to end of input" }
+        debugAt { "Matching to end of input" }
         return if (attempt.input.isExhausted()) {
             SyntaxTreeNode(this, "").apply(::debugMatchSuccess)
         } else {

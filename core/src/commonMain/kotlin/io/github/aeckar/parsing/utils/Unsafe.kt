@@ -1,6 +1,5 @@
 package io.github.aeckar.parsing.utils
 
-import io.github.aeckar.parsing.MalformedParserException
 import kotlin.properties.ReadOnlyProperty
 
 /**
@@ -9,12 +8,6 @@ import kotlin.properties.ReadOnlyProperty
 @PublishedApi
 @Suppress("UNCHECKED_CAST")
 internal fun <T> Any?.unsafeCast(): T = this as T
-
-/**
- * Quiets `LeakingThis` warning in constructors.
- * @return this
- */
-internal fun <T> T.self() = this
 
 /**
  * Returns a read-only delegate returning this value.
