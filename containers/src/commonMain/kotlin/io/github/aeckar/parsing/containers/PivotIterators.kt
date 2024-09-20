@@ -32,12 +32,8 @@ internal abstract class AbstractPivotIterator<out E, P : Comparable<P>, out H> i
     private var cursor: Pivot<P, H>? = null
 
     final override fun here(): H {
-        println("HERE")
-        println(pivots())   // TODO remove
         val node = cursor?.getOrInsert(revertible.position()) { init() } ?: Pivot(revertible.position(), init())
         this.cursor = node
-        println(node.value) // TODO remove
-        println("END HERE")
         return node.value
     }
 

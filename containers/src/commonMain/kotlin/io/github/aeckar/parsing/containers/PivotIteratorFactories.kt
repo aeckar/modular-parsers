@@ -22,13 +22,7 @@ public fun <H> String.pivotIterator(init: () -> H): CharPivotIterator<Int, H> {
     return object : AbstractPivotIterator<Char, Int, H>(
         revertible,
         init
-    ), CharPivotIterator<Int, H>, CharRevertibleIterator<Int> by revertible {
-        override fun revert() {
-            println("REVERT")
-            println(pivots())
-            println("END REVERTy")
-        }
-    }
+    ), CharPivotIterator<Int, H>, CharRevertibleIterator<Int> by revertible {}
 }
 
 /**

@@ -4,11 +4,10 @@ import io.github.aeckar.parsing.*
 import io.github.aeckar.parsing.containers.DoubleList
 import kotlin.test.Test
 
-// TODO ebnf to mp as well
 class ParserTest {
     @Test
     fun `basic arithmetic`() {
-        val math = parser {
+        val math by parser {
             val term by junction()
             val expression by junction()
 
@@ -33,7 +32,7 @@ class ParserTest {
 
     @Test
     fun `arithmetic with evaluation`() {
-        val math = parserOperator {
+        val math by parserOperator<Double> {
             // ---- fragments ----
             val DIGIT = of("0-9")
 

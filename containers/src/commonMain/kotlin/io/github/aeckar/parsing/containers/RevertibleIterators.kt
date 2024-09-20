@@ -6,6 +6,10 @@ import kotlinx.io.readString
 
 private const val SECTION_SIZE = 8192L
 
+private fun raiseExhausted(): Nothing {
+    throw NoSuchElementException("Iterator is exhausted")
+}
+
 /**
  * A sequence of elements whose position can be saved and reverted to later.
  */
@@ -19,25 +23,26 @@ public interface RevertibleIterator<out E, out P> : Iterator<E> {
     /**
      * Saves the current cursor position.
      *
-     * Can be called more than once to save multiple positions, even if [isExhausted] is true.
+     * Can be called more than once to save multiple positions, and even if [isExhausted] is true.
      */
     public fun save()
 
     /**
      * Reverts the position of the cursor to the one that was last [saved][save],
      * and removes it from the set of saved positions.
-     * @throws NoSuchElementException [save] has not been called prior
+     * @throws IllegalStateException [save] has not been called prior
      */
     public fun revert()
 
     /**
      * Removes the cursor position last [saved][save] without reverting the current cursor position to it.
-     * @throws NoSuchElementException [save] has not been called prior
+     * @throws IllegalStateException [save] has not been called prior
      */
     public fun removeSave()
 
     /**
      * Returns the next element in the sequence without advancing the current cursor position.
+     * @throws NoSuchElementException the iterator is exhausted
      */
     public fun peek(): E
 
@@ -66,6 +71,7 @@ public interface RevertibleIterator<out E, out P> : Iterator<E> {
 public interface CharRevertibleIterator<out P> : RevertibleIterator<Char, P>, CharIterator {
     /**
      * Returns a [peek] of the next unboxed character.
+     * @throws NoSuchElementException the iterator is exhausted
      */
     public fun peekChar(): Char
 
@@ -122,7 +128,7 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
     private fun removeLastSave(): Int {
         return try {
             savedPositions.removeLast()
-        } catch (e: NoSuchElementException) {
+        } catch (_: NoSuchElementException) {
             error("No positions saved")
         }
     }
@@ -132,11 +138,18 @@ internal class ListRevertibleIterator<out E>(override val elements: List<E>) : I
     override fun hasNext() = position < elements.size
     override fun isExhausted() = position >= elements.size
     override fun next(): E = peek().also { ++position }
-    override fun peek(): E = elements[position]
 
-    override fun toString() = buildString {
-        append(if (isExhausted()) "<iterator exhausted>" else "${peek()}")
-        append(" (index = $position)")
+    override fun peek(): E {
+        return try {
+            elements[position]
+        } catch (_: IndexOutOfBoundsException) {
+            raiseExhausted()
+        }
+    }
+
+    override fun toString(): String {
+        val message = if (isExhausted()) "<iterator exhausted>" else "${peek()}"
+        return "$message (index = $position)"
     }
 }
 
@@ -146,11 +159,18 @@ internal class StringRevertibleIterator(
     override fun hasNext() = position < elements.length
     override fun isExhausted() = position >= elements.length
     override fun nextChar() = peek().also { ++position }
-    override fun peekChar() = elements[position]
 
-    override fun toString() = buildString {
-        append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
-        append(" (index = $position)")
+    override fun peekChar(): Char {
+        return try {
+            elements[position]
+        } catch (_: IndexOutOfBoundsException) {
+            raiseExhausted()
+        }
+    }
+
+    override fun toString(): String {
+        val message = if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'"
+        return "$message (index = $position)"
     }
 }
 
@@ -190,12 +210,9 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         return buffer[section][sectionPosition]
     }
 
-    override fun toString() = buildString {
-//        val section = bufferSection.withEscapes()
-//            .asIterable()
-//            .joinToString(separator = "", prefix = "'", postfix = "'", limit = 20)
-        append(if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'")
-        append(" (absolute position = ${absolutePosition()})")
+    override fun toString(): String {
+        val message = if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'"
+        return message + " (position = ${absolutePosition()})"
     }
 
     override fun equals(other: Any?): Boolean {
@@ -218,7 +235,7 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
     private fun removeLastSave(): SourcePosition {
         return try {
             savedPositions.removeLast()
-        } catch (e: NoSuchElementException) {
+        } catch (_: NoSuchElementException) {
             error("No positions saved")
         }
     }
@@ -227,8 +244,7 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         while (sectionPosition >= buffer[section].length) {
             sectionPosition -= buffer[section].length
             if (!loadSection()) {
-                throw NoSuchElementException(
-                    "Underlying source is exhausted (absolute position = ${absolutePosition()})")
+                throw NoSuchElementException("Source is exhausted at position ${absolutePosition()}")
             }
             ++section
         }

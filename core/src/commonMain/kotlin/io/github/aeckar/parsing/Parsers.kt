@@ -137,7 +137,7 @@ internal fun <R> Parser.operator() = when (this) {
  * A nameable parser.
  */
 public sealed class NameableParser(def: ParserDefinition) : Nameable, Parser {
-     internal val unnamedLogger = @Suppress("LeakingThis") logger("parser@${hashCode().toString(radix = 8)}")
+     internal val unnamedLogger = @Suppress("LeakingThis") logger("parser@${hashCode().toString(radix = 16)}")
     internal val parserSymbols = def.compileSymbols()
     internal open val operator: OperatorProperties<*> get() = raiseNonOperator()
 
@@ -150,7 +150,7 @@ public sealed class NameableParser(def: ParserDefinition) : Nameable, Parser {
 
     init {
         def.inversionSymbols.forEach { it.origin = this }
-        topLevel.debugAt(@Suppress("LeakingThis") this) { "Defined with parser symbols $parserSymbols" }
+        debug { "Defined with parser symbols $parserSymbols" }
     }
 
     internal fun start(): Symbol {
@@ -215,12 +215,12 @@ public open class NameableLexerlessParser internal constructor(
         return start().match(ParsingAttempt(logger, input, skip))
     }
 
-    override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
+    final override val symbols: Map<String, NameableSymbol<*>> by lazy { parserSymbols.toImmutableMap() }
 
-    override fun parse(input: String): SyntaxTreeNode<*>? = parse(unnamedLogger, input.inputIterator())
-    override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(unnamedLogger, input.inputIterator())
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(unnamedLogger, input.inputIterator())
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(unnamedLogger, input.inputIterator())
 
-    override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, Named> {
+    override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, NamedLexerlessParser> {
         return NamedLexerlessParser(property.name, this).toNamedProperty()
     }
 }
@@ -232,6 +232,13 @@ public class NameableLexerlessParserOperator<R> internal constructor(
     def: LexerlessParserDefinition
 ) : NameableLexerlessParser(def), Operator<R> {
     public override val listeners: Map<String, Listener<*>> get() = operator.listenersCopy
+
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Any?, NamedLexerlessParserOperator<R>> {
+        return NamedLexerlessParserOperator(property.name, this).toNamedProperty()
+    }
 }
 
 /**
@@ -286,7 +293,7 @@ public open class NameableLexerParser internal constructor(
     }
 
     init {
-        topLevel.debugAt(@Suppress("LeakingThis") this) { "Parser Defined with lexer modes $lexerModes" }
+        debug { "Parser Defined with lexer modes $lexerModes" }
     }
 
     internal fun parse(logger: KLogger, input: List<Token>): SyntaxTreeNode<*>? {
@@ -322,16 +329,16 @@ public open class NameableLexerParser internal constructor(
         return tokens
     }
 
-    override fun tokenize(input: String): List<Token> = tokenize(unnamedLogger, input.inputIterator())
-    override fun tokenize(input: RawSource): List<Token> = tokenize(unnamedLogger, input.inputIterator())
-    override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input))
-    override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input))
+    final override fun tokenize(input: String): List<Token> = tokenize(unnamedLogger, input.inputIterator())
+    final override fun tokenize(input: RawSource): List<Token> = tokenize(unnamedLogger, input.inputIterator())
+    final override fun parse(input: String): SyntaxTreeNode<*>? = parse(tokenize(input))
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(tokenize(input))
 
-    override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
+    final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
         return parse(unnamedLogger, input)
     }
 
-    override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, Named> {
+    override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, NamedLexerParser> {
         return NamedLexerParser(property.name, this).toNamedProperty()
     }
 }
@@ -343,6 +350,13 @@ public class NameableLexerParserOperator<R> internal constructor(
     def: LexerParserDefinition
 ) : NameableLexerParser(def), LexerOperator<R> {
     public override val listeners: Map<String, Listener<*>> get() = operator.listenersCopy
+
+    override fun provideDelegate(
+        thisRef: Any?,
+        property: KProperty<*>
+    ): ReadOnlyProperty<Any?, NamedLexerParserOperator<R>> {
+        return NamedLexerParserOperator(property.name, this).toNamedProperty()
+    }
 }
 
 /**
@@ -355,23 +369,23 @@ public open class NamedLexerParser internal constructor(
     final override val name: String get() = super.name
     final override val symbols: Map<String, NameableSymbol<*>> get() = unnamed.symbols
 
-    override fun parse(input: String): SyntaxTreeNode<*>? {
+    final override fun parse(input: String): SyntaxTreeNode<*>? {
         return unnamed.parse(namedLogger, tokenize(input))
     }
 
-    override fun parse(input: RawSource): SyntaxTreeNode<*>? {
+    final override fun parse(input: RawSource): SyntaxTreeNode<*>? {
         return unnamed.parse(namedLogger, tokenize(input))
     }
 
-    override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
+    final override fun parse(input: List<Token>): SyntaxTreeNode<*>? {
         return unnamed.parse(namedLogger, input)
     }
 
-    override fun tokenize(input: String): List<Token> {
+    final override fun tokenize(input: String): List<Token> {
         return unnamed.tokenize(namedLogger, input.inputIterator())
     }
 
-    override fun tokenize(input: RawSource): List<Token> {
+    final override fun tokenize(input: RawSource): List<Token> {
         return unnamed.tokenize(namedLogger, input.inputIterator())
     }
 }

@@ -1,6 +1,7 @@
 @file:JvmName("Parsers")
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.OperatorDefinition.ReturnDescriptor
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.InvocationKind
 import kotlin.contracts.contract
@@ -22,7 +23,7 @@ public fun parser(definition: LexerlessParserDefinition.() -> Unit): NameableLex
  */
 @OptIn(ExperimentalContracts::class)
 public fun <R> parserOperator(
-    definition: LexerlessParserOperatorDefinition<R>.() -> Unit
+    definition: LexerlessParserOperatorDefinition<R>.() -> ReturnDescriptor<R>
 ): NameableLexerlessParserOperator<R> {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
     return NameableLexerlessParserOperator(LexerlessParserOperatorDefinition<R>().also { definition(it) })
@@ -44,7 +45,7 @@ public fun lexerParser(definition: LexerParserDefinition.() -> Unit): NameableLe
  */
 @OptIn(ExperimentalContracts::class)
 public fun <R> lexerParserOperator(
-    definition: LexerParserOperatorDefinition<R>.() -> Unit
+    definition: LexerParserOperatorDefinition<R>.() -> ReturnDescriptor<R>
 ): NameableLexerParserOperator<R> {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }
     return NameableLexerParserOperator(LexerParserOperatorDefinition<R>().also { definition(it) })

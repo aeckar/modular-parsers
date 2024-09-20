@@ -16,7 +16,7 @@ private val LIST = listOf("first", 2, 3.0)
 
 class IteratorTests {
     private fun RevertibleIterator<*, *>.testReverting(elements: List<*>) {
-        assertFailsWith<NoSuchElementException> { revert() }
+        assertFailsWith<IllegalStateException> { revert() }
         save()
         save()
         next()
@@ -36,6 +36,8 @@ class IteratorTests {
         revert()
         advance(2)
         assertEquals(16, here()[0])
+        advance(2)
+        assertFailsWith<NoSuchElementException> { next() }
     }
 
     @Test

@@ -3,6 +3,7 @@ package io.github.aeckar.parsing
 import io.github.aeckar.parsing.LexerSymbol.Behavior
 import io.github.aeckar.parsing.LexerSymbol.Descriptor
 import io.github.aeckar.parsing.LexerSymbol.Fragment
+import io.github.aeckar.parsing.OperatorDefinition.ReturnDescriptor
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
 import kotlinx.collections.immutable.toImmutableList
@@ -50,18 +51,29 @@ internal fun raiseNonOperator(): Nothing {
  *
  * @param R the type of the value returned by the operator being defined.
  */
-public sealed interface OperatorDefinition<R>
+public sealed interface OperatorDefinition<R> {
+    /**
+     * Contains the type information of the value returned by an operator
+     */
+    @Suppress("unused")
+    public class ReturnDescriptor<R> private constructor() {
+        internal companion object {
+            val INSTANCE: ReturnDescriptor<*> = ReturnDescriptor<Nothing>()
+        }
+    }
+}
 
 /**
  * Signals that this operator returns an instance of [R], as returned by [lazyValue].
  */
 @Suppress("UNCHECKED_CAST")
-public fun <R> OperatorDefinition<R>.returns(lazyValue: () -> R) {
+public fun <R> OperatorDefinition<R>.returns(lazyValue: () -> R): ReturnDescriptor<R> {
     try {
         (this as ParserDefinition).operator.returnValue = lazyValue as () -> Nothing
     } catch (e: IllegalStateException) {
         throw MalformedParserException("Ambiguous return value", e)
     }
+    return ReturnDescriptor.INSTANCE as ReturnDescriptor<R>
 }
 
 // ------------------------------------ parser-operator definitions ------------------------------------
@@ -213,6 +225,7 @@ public sealed class ParserDefinition {
      *
      * Doing this for multiple named symbols is legal.
      */
+    @Suppress("unused")
     public operator fun <S : NameableSymbol<out S>> NameableSymbol<out S>.provideDelegate(
         thisRef: Any?,
         property: KProperty<*>
@@ -407,6 +420,7 @@ public open class LexerlessParserDefinition internal constructor() : ParserDefin
     /**
      * Assigns a [Text] symbol of the single character to the property being delegated to.
      */
+    @Suppress("unused")
     public operator fun Char.provideDelegate(
         thisRef: Any?,
         symbol: KProperty<*>
@@ -572,6 +586,7 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
     /**
      * Assigns a [LexerSymbol] matching this fragment to the property being delegated to.
      */
+    @Suppress("unused")
     public operator fun Fragment.provideDelegate(
         thisRef: Any?,
         symbol: KProperty<*>
@@ -582,6 +597,7 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
     /**
      * Assigns a [LexerSymbol] matching this descriptor to the property being delegated to.
      */
+    @Suppress("unused")
     public operator fun Descriptor.provideDelegate(
         thisRef: Any?,
         symbol: KProperty<*>
@@ -594,6 +610,7 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
     /**
      * Assigns a [LexerSymbol] matching this character to the property being delegated to.
      */
+    @Suppress("unused")
     public operator fun Char.provideDelegate(
         thisRef: Any?,
         symbol: KProperty<*>
