@@ -22,34 +22,38 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
  */
 public abstract class Symbol internal constructor(
 ) : ParserComponent() { // Unseal to allow inheritance from type-safe symbols
-    protected fun debugUnwrap(wrapped: Symbol) {
-        debugAt { "Unwrapping symbol: ${wrapped.blue()}" }
+    internal fun ParsingAttempt.debug(lazyMessage: () -> String) {
+        logger.debugAt(this@Symbol) { lazyMessage() }
     }
 
-    protected fun debugQuery(query: Symbol) {
-        debugAt { "Attempting match to: ${query.blue()}" }
+    internal fun ParsingAttempt.debugUnwrap(wrapped: Symbol) {
+        logger.debugAt(this@Symbol) { "Unwrapping symbol: ${wrapped.blue()}" }
     }
 
-    protected fun debugMatchSuccess(result: SyntaxTreeNode<*>) {
-        debugAt {
+    internal fun ParsingAttempt.debugQuery(query: Symbol) {
+        logger.debugAt(this@Symbol) { "Attempting match to: ${query.blue()}" }
+    }
+
+    internal fun ParsingAttempt.debugMatchSuccess(result: SyntaxTreeNode<*>) {
+        logger.debugAt(this@Symbol) {
             "Match succeeded".greenEmphasis() +
-            " (substring = '" + result.substring.withEscapes().yellow() + "')"
+                    " (substring = '" + result.substring.withEscapes().yellow() + "')"
         }
     }
 
-    protected fun debugMatchSuccess(result: SyntaxTreeNode<*>, lazyReason: () -> String) {
-        debugAt {
+    internal fun ParsingAttempt.debugMatchSuccess(result: SyntaxTreeNode<*>, lazyReason: () -> String) {
+        logger.debugAt(this@Symbol) {
             "Match succeeded".greenEmphasis() +
-            " (${lazyReason()}, substring = '" + result.substring.withEscapes().yellow() + "')"
+                    " (${lazyReason()}, substring = '" + result.substring.withEscapes().yellow() + "')"
         }
     }
 
-    protected fun debugMatchFail() {
-        debugAt { "Match failed".redEmphasis() }
+    internal fun ParsingAttempt.debugMatchFail() {
+        logger.debugAt(this@Symbol) { "Match failed".redEmphasis() }
     }
 
-    protected fun debugMatchFail(lazyReason: () -> String ) {
-        debugAt { "Match failed".redEmphasis() + " (${lazyReason()})" }
+    internal fun ParsingAttempt.debugMatchFail(lazyReason: () -> String ) {
+        logger.debugAt(this@Symbol) { "Match failed".redEmphasis() + " (${lazyReason()})" }
     }
 
     /**
@@ -92,12 +96,12 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
      */
     internal fun align(attempt: ParsingAttempt) {
         attempt.skip?.let {
-            debugAt { "Attempting match to skip: ".magentaBold() + attempt.skip.toString().blue() }
+            attempt.debug { "Attempting match to skip: ".magentaBold() + attempt.skip.toString().blue() }
             val previousSkip = attempt.skip
             attempt.skip = null // Prevent infinite recursion
             it.match(attempt)
             attempt.skip = previousSkip
-            debugAt { "End skip".magentaBold() }
+            attempt.debug { "End skip".magentaBold() }
         }
     }
 
@@ -108,22 +112,22 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val startPos = attempt.input.here()
         if (this in startPos.fails) {
-            debugMatchFail { "Previous attempt failed" }
+            attempt.debugMatchFail { "Previous attempt failed" }
             return null
         }
         startPos.successes[this]?.let {
-            debugMatchSuccess(it) { "Previous attempt succeeded" }
+            attempt.debugMatchSuccess(it) { "Previous attempt succeeded" }
             return it.unsafeCast()
         }
-        debugAt { "Attempting match" }
+        attempt.debug { "Attempting match" }
         startPos.symbols += this
         attempt.input.save()
         val result = matchNoCache(attempt)
         if (result != null) {
-            debugMatchSuccess(result)
+            attempt.debugMatchSuccess(result)
             startPos.successes[this] = result
         } else {
-            debugMatchFail()
+            attempt.debugMatchFail()
             startPos.fails += this
         }
         return result
@@ -143,7 +147,7 @@ public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal 
     final override fun unwrap() = unnamed
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debugUnwrap(unnamed)
+        attempt.debugUnwrap(unnamed)
         return unnamed.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
     }
 
@@ -162,9 +166,9 @@ public class ForeignSymbol<UnnamedT : NameableSymbol<out UnnamedT>>(
     internal val origin: Parser
 ) : NamedSymbol<UnnamedT>(named.name, named.unnamed) {
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debugUnwrap(unnamed)
+        attempt.debugUnwrap(unnamed)
         val previousSkip = attempt.skip
-        attempt.skip = (origin as? LexerlessParser)?.skip
+        attempt.skip = origin.skipOrNull()
         val result = unnamed.match(attempt)
         attempt.skip = previousSkip
         return result
@@ -236,7 +240,7 @@ public class LexerSymbol internal constructor(
     }
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debugUnwrap(start.root)
+        attempt.debugUnwrap(start.root)
         return start.lex(attempt)?.let {
             attempt.modeStack.apply(behavior.action)
             SyntaxTreeNode(this, it)
@@ -327,13 +331,13 @@ public class Repetition<SubMatchT : Symbol>(private val query: SubMatchT) : Simp
         while (subMatch != null) {
             subMatches += subMatch
             if (subMatch.substring.isEmpty()) { // No need to push to fail stack
-                debugAt { "End matches to query (matched substring is empty)" }
+                attempt.debug { "End matches to query (matched substring is empty)" }
                 break
             }
             align(attempt)
             subMatch = query.match(attempt).unsafeCast()
         }
-        debugAt { "Query matched ${subMatches.size} times" }
+        attempt.debug { "Query matched ${subMatches.size} times" }
         input.revert()
         if (subMatches.isEmpty()) {
             return null
@@ -370,11 +374,11 @@ public class Inversion(
     internal var origin: Parser by OnceAssignable(raise = ::IllegalStateException)
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debugAt { "Attempting match to any not of: " + antiquery.blue() }
-        return origin.parserSymbols.values
+        attempt.debug { "Attempting match to any not of: " + antiquery.blue() }
+        return origin.parserSymbols().values
             .asSequence()
             .mapNotNull {
-                debugQuery(it)
+                attempt.debugQuery(it)
                 it.match(attempt)
             }
             .firstOrNull()
@@ -400,7 +404,7 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         val result = components.asSequence()
             .filter { it !in startPos.symbols /* prevent infinite recursion */ }
             .map {
-                debugQuery(it)
+                attempt.debugQuery(it)
                 it.match(attempt)
             }
             .withIndex()
@@ -431,7 +435,7 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
         val firstQuery = components.first()
         if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.input.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
-            debugAt { "Left-recursion found for non-junction query: $firstQuery" }
+            attempt.debug { "Left-recursion found for non-junction query: $firstQuery" }
             input.removeSave()
             return null
         }
@@ -474,11 +478,11 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
  */
 public class End : SimpleSymbol<End>() {  // Doesn't make sense to cache this
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        debugAt { "Matching to end of input" }
+        attempt.debug { "Matching to end of input" }
         return if (attempt.input.isExhausted()) {
-            SyntaxTreeNode(this, "").apply(::debugMatchSuccess)
+            SyntaxTreeNode(this, "").also { attempt.debugMatchSuccess(it) }
         } else {
-            debugMatchFail()
+            attempt.debugMatchFail()
             null
         }
     }

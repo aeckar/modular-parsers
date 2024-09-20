@@ -1,8 +1,6 @@
 package io.github.aeckar.parsing.typesafe
 
 import io.github.aeckar.parsing.*
-import io.github.aeckar.parsing.utils.self
-import io.github.aeckar.parsing.utils.unsafeCast
 
 /**
  * A symbol providing type-safe access to its components.
@@ -15,8 +13,9 @@ public abstract class TypeSafeSymbol<
 > internal constructor(internal val typeUnsafe: TypeUnsafeT) : NameableSymbol<Self>() {
     final override fun unwrap() = typeUnsafe
 
+    @Suppress("UNCHECKED_CAST")
     final override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        return typeUnsafe.match(attempt)?.also { it.unsafeCast<SyntaxTreeNode<Symbol>>().source = this }
+        return typeUnsafe.match(attempt)?.also { (it as SyntaxTreeNode<Symbol>).source = this }
     }
 
     final override fun matchNoCache(attempt: ParsingAttempt) = match(attempt)
@@ -26,21 +25,23 @@ public abstract class TypeSafeSymbol<
 /**
  * A type-safe junction wrapper.
  */
+@Suppress("LeakingThis")
 public abstract class TypeSafeJunction<Self : TypeSafeJunction<Self>> internal constructor(
     untyped: TypeUnsafeJunction<Self>
 ) : TypeSafeSymbol<TypeUnsafeJunction<Self>, Self>(untyped) {
     init {
-        untyped.typeSafe = self()
+        untyped.typeSafe = this
     }
 }
 
 /**
  * A type-safe sequence wrapper.
  */
+@Suppress("LeakingThis")
 public abstract class TypeSafeSequence<Self : TypeSafeSequence<Self>> internal constructor(
     untyped: TypeUnsafeSequence<Self>
 ) : TypeSafeSymbol<TypeUnsafeSequence<Self>, Self>(untyped) {
     init {
-        untyped.typeSafe = self()
+        untyped.typeSafe = this
     }
 }

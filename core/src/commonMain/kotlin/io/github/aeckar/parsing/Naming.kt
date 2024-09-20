@@ -4,6 +4,14 @@ import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
 /**
+ * Returns a read-only delegate returning this value.
+ */
+@Suppress("UNCHECKED_CAST")
+internal fun <NamedT : Named, ReadOnlyT : ReadOnlyProperty<Any?, NamedT>> NamedT.toNamedProperty(): ReadOnlyT {
+    return ReadOnlyProperty<Any?, NamedT> { _, _ -> this } as ReadOnlyT
+}
+
+/**
  * Delegating an instance of this class to a property assigns it
  * a [Named] wrapper of the original instance.
  */

@@ -8,7 +8,7 @@ import io.github.aeckar.parsing.utils.unsafeCast
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.jvm.JvmName
 
-// Functions with Token<...> receiver must be extensions to ensure proper nesting of token contexts in listeners
+// Functions operating on AST nodes must be extensions to ensure proper nesting of token contexts in listeners
 
 // TODO add functions to work with named symbol AST nodes
 

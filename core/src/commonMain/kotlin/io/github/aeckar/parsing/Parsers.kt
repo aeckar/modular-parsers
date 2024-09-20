@@ -81,15 +81,18 @@ internal class OperatorProperties<R>(def: OperatorDefinition<R>) {
 
     internal val listenersMap = operator.listeners
     internal val listenersCopy by lazy { listenersMap.toImmutableMap() }
-    internal val returnValue = operator.returnValueDelegate.field.unsafeCast() as? () -> R
+
+    @Suppress("UNCHECKED_CAST")
+    internal val returnValue = operator.returnValueDelegate.field as? () -> R
         ?: throw MalformedParserException("Undefined return value")
 }
 
+@Suppress("UNCHECKED_CAST")
 @PublishedApi
 internal fun SyntaxTreeNode<*>.invokeListeners(parser: Parser): SyntaxTreeNode<*> = onEach {
-    parser.operator<Any?>().listenersMap[it.toString()]
-        ?.unsafeCast<Listener<Symbol>>()
-        ?.apply { it.unsafeCast<SyntaxTreeNode<Symbol>>()() }
+    (parser.operator<Any?>().listenersMap[it.toString()]
+         as? Listener<Symbol>)
+        ?.apply { (it as SyntaxTreeNode<Symbol>)() }
 }
 
 // ------------------------------------ parsers & lexers ------------------------------------
@@ -114,9 +117,20 @@ public sealed interface Parser {
     public fun parse(input: RawSource): SyntaxTreeNode<*>?
 }
 
-internal fun <R> Parser.operator(): OperatorProperties<R> = when (this) {
-    is NameableParser -> operator.unsafeCast()
-    is NamedParser -> unnamed.operator.unsafeCast()
+internal fun Parser.skipOrNull() = when (this) {
+    is NameableLexerlessParser -> skip
+    is NamedLexerlessParser -> unnamed.skip
+    else -> null
+}
+internal fun Parser.parserSymbols() = when (this) {
+    is NameableParser -> parserSymbols
+    is NamedParser -> unnamed.parserSymbols
+}
+
+@Suppress("UNCHECKED_CAST")
+internal fun <R> Parser.operator() = when (this) {
+    is NameableParser -> operator as OperatorProperties<R>
+    is NamedParser -> unnamed.operator as OperatorProperties<R>
 }
 
 /**
@@ -207,7 +221,7 @@ public open class NameableLexerlessParser internal constructor(
     override fun parse(input: RawSource): SyntaxTreeNode<*>? = parse(unnamedLogger, input.inputIterator())
 
     override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, Named> {
-        return NamedLexerlessParser(property.name, this).readOnlyProperty()
+        return NamedLexerlessParser(property.name, this).toNamedProperty()
     }
 }
 
@@ -318,7 +332,7 @@ public open class NameableLexerParser internal constructor(
     }
 
     override fun provideDelegate(thisRef: Any?, property: KProperty<*>): ReadOnlyProperty<Any?, Named> {
-        return NamedLexerParser(property.name, this).readOnlyProperty()
+        return NamedLexerParser(property.name, this).toNamedProperty()
     }
 }
 

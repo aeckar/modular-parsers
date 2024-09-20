@@ -55,9 +55,10 @@ public sealed interface OperatorDefinition<R>
 /**
  * Signals that this operator returns an instance of [R], as returned by [lazyValue].
  */
+@Suppress("UNCHECKED_CAST")
 public fun <R> OperatorDefinition<R>.returns(lazyValue: () -> R) {
     try {
-        (this as ParserDefinition).operator.returnValue = lazyValue.unsafeCast()
+        (this as ParserDefinition).operator.returnValue = lazyValue as () -> Nothing
     } catch (e: IllegalStateException) {
         throw MalformedParserException("Ambiguous return value", e)
     }
@@ -190,6 +191,7 @@ public sealed class ParserDefinition {
      * Whenever a match is made to this symbol,
      * the listener previously defined for this symbol is invoked before this one is.
      */
+    @Suppress("UNCHECKED_CAST")
     protected open infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
         action: Listener<MatchT>
     ) {
@@ -197,7 +199,7 @@ public sealed class ParserDefinition {
         val operator = origin.operator<Any?>()
         def.ensureExtensionCandidate(name, origin)
         operator.listenersMap[name] = Listener {
-            with(operator.listenersMap.getValue(name).unsafeCast<Listener<MatchT>>()) {
+            with(operator.listenersMap.getValue(name) as Listener<MatchT>) {
                 this@Listener()
             }
             with(action) { this@Listener() }
@@ -224,7 +226,7 @@ public sealed class ParserDefinition {
             }
             parserSymbols[name] = this
         }
-        return NamedSymbol(name, this).readOnlyProperty()
+        return NamedSymbol(name, this).toNamedProperty()
     }
 
     /**
@@ -232,7 +234,7 @@ public sealed class ParserDefinition {
      * @throws NoSuchElementException the symbol is undefined
      */
     public operator fun Parser.get(symbolName: String): Symbol {
-        return parserSymbols[symbolName]?.let { ForeignSymbol(NamedSymbol(symbolName, it), this) }
+        return parserSymbols()[symbolName]?.let { ForeignSymbol(NamedSymbol(symbolName, it), this) }
             ?: throw MalformedParserException("Symbol '$symbolName' is undefined")
     }
 
@@ -251,6 +253,7 @@ public sealed class ParserDefinition {
      *
      * If the symbol is not defined in the parser, a [MalformedParserException] will be thrown upon delegation.
      */
+    @Suppress("UNCHECKED_CAST")
     public inner class ImportDescriptor<UnnamedT : NameableSymbol<UnnamedT>> internal constructor(
         internal val origin: Parser
     ) : Nameable {
@@ -258,13 +261,13 @@ public sealed class ParserDefinition {
             thisRef: Any?,
             property: KProperty<*>
         ): ReadOnlyProperty<Any?, ForeignSymbol<UnnamedT>> {
-            return ForeignSymbol<UnnamedT>(resolveSymbol(property.name).unsafeCast(), origin)
-                .readOnlyProperty()
+            return ForeignSymbol(resolveSymbol(property.name) as NamedSymbol<out UnnamedT>, origin)
+                .toNamedProperty()
         }
 
         private fun resolveSymbol(name: String): NamedSymbol<*> {
             val symbol = try {
-                origin.parserSymbols.getValue(name)
+                origin.parserSymbols().getValue(name)
             } catch (e: NoSuchElementException) {
                 throw MalformedParserException("Symbol '$name' is not defined", e)
             }
@@ -281,17 +284,18 @@ public sealed class ParserDefinition {
      * If not assigned at least once, a [MalformedParserException] is thrown after parser initialization.
      * @throws MalformedParserException this property is accessed before it is assigned a value
      */
+    @Suppress("UNCHECKED_CAST")
     public var <TypeSafeT : TypeSafeSymbol<*, *>, TypeUnsafeT : TypeUnsafeSymbol<out TypeSafeT, out TypeUnsafeT>>
     NamedSymbol<out TypeUnsafeT>.actual: TypeSafeT
         get() {
             return try {
-                unnamed.unsafeCast()
+                unnamed as TypeSafeT
             } catch (e: ClassCastException) {
                 throw MalformedParserException("Definition of '$name' accessed before it was defined", e)
             }
         }
         set(value) {
-            unnamed = value.typeUnsafe.unsafeCast()
+            unnamed = value.typeUnsafe as NameableSymbol<Nothing>
             implicitSymbols[name] = unnamed
         }
 
@@ -376,11 +380,11 @@ public sealed class ParserDefinition {
     public operator fun <S1 : Symbol, S2 : Symbol> S1.plus(query2: S2): Sequence2<S1, S2> = toSequence(this, query2)
 
     protected fun <S1 : Symbol, S2 : Symbol> toJunction(option1: S1, option2: S2): Junction2<S1, S2> {
-        return Junction2(TypeUnsafeJunction(option1, option2).unsafeCast())
+        return Junction2(TypeUnsafeJunction(option1, option2))
     }
 
     protected fun <S1 : Symbol, S2 : Symbol> toSequence(query1: S1, query2: S2): Sequence2<S1, S2> {
-        return Sequence2(TypeUnsafeSequence(query1, query2).unsafeCast())
+        return Sequence2(TypeUnsafeSequence(query1, query2))
     }
 }
 
@@ -407,11 +411,11 @@ public open class LexerlessParserDefinition internal constructor() : ParserDefin
         thisRef: Any?,
         symbol: KProperty<*>
     ): ReadOnlyProperty<Any?, NamedSymbol<Text>> {
-        return NamedSymbol(symbol.name, Text(this)).readOnlyProperty()
+        return NamedSymbol(symbol.name, Text(this)).toNamedProperty()
     }
 
-    public override fun text(query: String): Text = super.text(query).unsafeCast()
-    public override fun of(switch: String): Switch = super.of(switch).unsafeCast()
+    public override fun text(query: String): Text = super.text(query) as Text
+    public override fun of(switch: String): Switch = super.of(switch) as Switch
 
     // ------------------------------ option factories ------------------------------
 
@@ -572,7 +576,7 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
         thisRef: Any?,
         symbol: KProperty<*>
     ): ReadOnlyProperty<Nothing?, NamedSymbol<LexerSymbol>> {
-        return NamedSymbol(symbol.name, LexerSymbol(this)).readOnlyProperty()
+        return NamedSymbol(symbol.name, LexerSymbol(this)).toNamedProperty()
     }
 
     /**
@@ -582,7 +586,7 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
         thisRef: Any?,
         symbol: KProperty<*>
     ): ReadOnlyProperty<Nothing?, NamedSymbol<LexerSymbol>> {
-        return NamedSymbol(symbol.name, LexerSymbol(fragment, behavior)).readOnlyProperty()
+        return NamedSymbol(symbol.name, LexerSymbol(fragment, behavior)).toNamedProperty()
     }
 
     // ------------------------------ text & switch factories ------------------------------
@@ -596,12 +600,12 @@ public open class LexerParserDefinition internal constructor() : ParserDefinitio
     ): ReadOnlyProperty<Any?, NamedSymbol<LexerSymbol>> {
         val named = NamedSymbol(symbol.name, LexerSymbol(Fragment(Text(this))))
         lexerModes.getValue(mode) += named
-        return named.readOnlyProperty()
+        return named.toNamedProperty()
     }
 
     public override fun text(query: String): Fragment = Fragment(Text(query))
     public override fun of(switch: String): Fragment {
-        return Fragment(super.of(switch).unsafeCast())
+        return Fragment(super.of(switch) as Switch)
     }
 
     // ------------------------------ option factories ------------------------------
