@@ -125,6 +125,11 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
         return result
     }
 
+    final override fun toString(): String {
+        val message = if (isExhausted()) "<iterator exhausted>" else "${peek()}"
+        return "$message (index = $position)"
+    }
+
     private fun removeLastSave(): Int {
         return try {
             savedPositions.removeLast()
@@ -146,11 +151,6 @@ internal class ListRevertibleIterator<out E>(override val elements: List<E>) : I
             raiseExhausted()
         }
     }
-
-    override fun toString(): String {
-        val message = if (isExhausted()) "<iterator exhausted>" else "${peek()}"
-        return "$message (index = $position)"
-    }
 }
 
 internal class StringRevertibleIterator(
@@ -158,7 +158,7 @@ internal class StringRevertibleIterator(
 ) : IndexRevertibleIterator<Char>(), CharRevertibleIterator<Int> {
     override fun hasNext() = position < elements.length
     override fun isExhausted() = position >= elements.length
-    override fun nextChar() = peek().also { ++position }
+    override fun nextChar() = peekChar().also { ++position }
 
     override fun peekChar(): Char {
         return try {
@@ -166,11 +166,6 @@ internal class StringRevertibleIterator(
         } catch (_: IndexOutOfBoundsException) {
             raiseExhausted()
         }
-    }
-
-    override fun toString(): String {
-        val message = if (isExhausted()) "<iterator exhausted>" else "'${peekChar()}'"
-        return "$message (index = $position)"
     }
 }
 
@@ -187,7 +182,6 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
     }
 
     override fun save() {
-        verifySection()
         savedPositions += position()
     }
 
@@ -203,10 +197,10 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
     }
 
     override fun hasNext() = sectionPosition < buffer[section].length || loadSection()
-    override fun nextChar() = peek().also { ++sectionPosition }
+    override fun nextChar() = peekChar().also { ++sectionPosition }
 
     override fun peekChar(): Char {
-        verifySection()
+        verifyPosition()
         return buffer[section][sectionPosition]
     }
 
@@ -240,16 +234,6 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         }
     }
 
-    private fun verifySection() {
-        while (sectionPosition >= buffer[section].length) {
-            sectionPosition -= buffer[section].length
-            if (!loadSection()) {
-                throw NoSuchElementException("Source is exhausted at position ${absolutePosition()}")
-            }
-            ++section
-        }
-    }
-
     /**
      * Returns true if the next section exists, or false if this input stream has been exhausted.
      */
@@ -264,6 +248,16 @@ internal class SourceRevertibleIterator(private val source: RawSource) : CharRev
         }
         buffer += nextSection
         return true
+    }
+
+    private fun verifyPosition() {
+        while (sectionPosition >= buffer[section].length) {
+            sectionPosition -= buffer[section].length
+            if (!loadSection()) {
+                throw NoSuchElementException("Source is exhausted at position ${absolutePosition()}")
+            }
+            ++section
+        }
     }
 
     private fun absolutePosition(): Int {

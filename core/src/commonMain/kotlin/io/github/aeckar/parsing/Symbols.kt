@@ -3,6 +3,10 @@ package io.github.aeckar.parsing
 import io.github.aeckar.parsing.containers.CharRevertibleIterator
 import io.github.aeckar.parsing.typesafe.*
 import io.github.aeckar.parsing.utils.*
+import io.github.aeckar.parsing.utils.greenEmphasis
+import io.github.aeckar.parsing.utils.redEmphasis
+import io.github.aeckar.parsing.utils.withEscapes
+import io.github.aeckar.parsing.utils.yellow
 
 private inline fun Symbol.parenthesizeIf(predicate: (Symbol) -> Boolean): String {
     return if (predicate(this)) "($this)" else toString()
@@ -11,7 +15,7 @@ private inline fun Symbol.parenthesizeIf(predicate: (Symbol) -> Boolean): String
 /**
  * Returns the concatenation of the substrings of all elements in this list.
  */
-private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substring }
+private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substring }   // TODO optimize, make lazy
 
 // ------------------------------ generic symbols ------------------------------
 
@@ -23,37 +27,25 @@ private fun List<SyntaxTreeNode<*>>.concatenate() = joinToString("") { it.substr
 public abstract class Symbol internal constructor(
 ) : ParserComponent() { // Unseal to allow inheritance from type-safe symbols
     internal fun ParsingAttempt.debug(lazyMessage: () -> String) {
+//        println(this.input.position())
         logger.debugAt(this@Symbol) { lazyMessage() }
     }
 
     internal fun ParsingAttempt.debugUnwrap(wrapped: Symbol) {
-        logger.debugAt(this@Symbol) { "Unwrapping symbol: ${wrapped.blue()}" }
+        debug { "Unwrapping symbol: ${wrapped.blue()}" }
     }
 
     internal fun ParsingAttempt.debugQuery(query: Symbol) {
-        logger.debugAt(this@Symbol) { "Attempting match to: ${query.blue()}" }
+        debug { "Attempting match to: ${query.blue()}" }
     }
 
     internal fun ParsingAttempt.debugMatchSuccess(result: SyntaxTreeNode<*>) {
-        logger.debugAt(this@Symbol) {
-            "Match succeeded".greenEmphasis() +
-                    " (substring = '" + result.substring.withEscapes().yellow() + "')"
-        }
-    }
-
-    internal fun ParsingAttempt.debugMatchSuccess(result: SyntaxTreeNode<*>, lazyReason: () -> String) {
-        logger.debugAt(this@Symbol) {
-            "Match succeeded".greenEmphasis() +
-                    " (${lazyReason()}, substring = '" + result.substring.withEscapes().yellow() + "')"
-        }
+        debug { "Match succeeded".greenEmphasis() +
+                    " (substring = '" + result.substring.withEscapes().yellow() + "')" }
     }
 
     internal fun ParsingAttempt.debugMatchFail() {
-        logger.debugAt(this@Symbol) { "Match failed".redEmphasis() }
-    }
-
-    internal fun ParsingAttempt.debugMatchFail(lazyReason: () -> String ) {
-        logger.debugAt(this@Symbol) { "Match failed".redEmphasis() + " (${lazyReason()})" }
+        debug { "Match failed".redEmphasis() }
     }
 
     /**
@@ -110,13 +102,16 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
     override fun unwrap() = this as Symbol
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        val startPos = attempt.input.here()
+        val startPos = attempt.input.here() // TODO optimize by optionally passing this as an argument
         if (this in startPos.fails) {
-            attempt.debugMatchFail { "Previous attempt failed" }
+            attempt.debug { "Match failed".redEmphasis() + " (Previous attempt failed)" }
             return null
         }
         startPos.successes[this]?.let {
-            attempt.debugMatchSuccess(it) { "Previous attempt succeeded" }
+            attempt.debug {
+                "Match succeeded".greenEmphasis() +
+                " (Previous attempt succeeded, substring = '" + it.substring.withEscapes().yellow() + "')"
+            }
             return it.unsafeCast()
         }
         attempt.debug { "Attempting match" }
@@ -139,12 +134,13 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
 /**
  * A symbol given a name by being delegated to a property.
  */
+@ListenerDsl
 public open class NamedSymbol<UnnamedT : NameableSymbol<out UnnamedT>> internal constructor(
     override val name: String,
     internal var unnamed: NameableSymbol<out UnnamedT>
 ) : Symbol(), Named {
 
-    final override fun unwrap() = unnamed
+    final override fun unwrap() = unnamed.unwrap()
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         attempt.debugUnwrap(unnamed)
@@ -398,19 +394,16 @@ public class TypeUnsafeJunction<TypeSafeT : TypeSafeJunction<TypeSafeT>> interna
         components += option1
         components += option2
     }
-
+    // TODO renamed TypeSafe -> Typed, TypeUnsafe -> Generic
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val startPos = attempt.input.here()
         val result = components.asSequence()
-            .filter { it !in startPos.symbols /* prevent infinite recursion */ }
-            .map {
-                attempt.debugQuery(it)
-                it.match(attempt)
+            .filter { it.unwrap() !in startPos.symbols }
+            .mapIndexedNotNull { index, query ->
+                attempt.debugQuery(query)
+                query.match(attempt)?.let { JunctionNode(typeSafe, it.substring, it, index) }
             }
-            .withIndex()
-            .find { it.value != null }
-            ?.unsafeCast<IndexedValue<SyntaxTreeNode<*>>>()
-            ?.let { JunctionNode(typeSafe, it.value.substring, it.value, it.index) }
+            .firstOrNull()
         attempt.input.removeSave()
         return result
     }
@@ -431,11 +424,11 @@ public class TypeUnsafeSequence<TypeSafeT : TypeSafeSequence<TypeSafeT>> interna
     }
 
     override fun matchNoCache(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
-        val input = attempt.input
-        val firstQuery = components.first()
-        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in attempt.input.here().symbols) {
+        val input = attempt.input   // TODO optimize by caching AST nodes
+        val firstQuery = components.first().unwrap()
+        if (firstQuery !is TypeUnsafeJunction<*> && firstQuery in input.here().symbols) {
             // Prevent infinite recursion. Does not apply to junctions since they already handle infinite recursion
-            attempt.debug { "Left-recursion found for non-junction query: $firstQuery" }
+            attempt.debug { "Left-recursion found for non-junction: $firstQuery" }
             input.removeSave()
             return null
         }

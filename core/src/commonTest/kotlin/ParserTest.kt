@@ -35,6 +35,8 @@ class ParserTest {
         val math by parserOperator<Double> {
             // ---- fragments ----
             val DIGIT = of("0-9")
+            val WHOLE_PART = multiple(DIGIT)
+            val DECIMAL_PART = '.' + multiple(DIGIT)
 
             // ---- symbols ----
             val expression by junction()
@@ -47,7 +49,8 @@ class ParserTest {
             val division by operation('/')
 
             //val number by any(DIGIT) + maybe('.') + any(DIGIT) not '.'
-            val number by any(DIGIT) + maybe('.') + any(DIGIT)
+            val number by WHOLE_PART + maybe(DECIMAL_PART) or
+                    DECIMAL_PART
 
             // ---- configuration ----
             expression.actual = '(' + expression + ')' or
@@ -64,30 +67,15 @@ class ParserTest {
             val operands = DoubleList()
 
             // ---- listeners ----
-
-            addition listener {
-                operands += operands.removeLast() + operands.removeLast()
-            }
-
-            subtraction listener {
-                operands += operands.removeLast() - operands.removeLast()
-            }
-
-            multiplication listener {
-                operands += operands.removeLast() * operands.removeLast()
-            }
-
-            division listener {
-                operands += operands.removeLast() / operands.removeLast()
-            }
-
-            number listener {
-                operands += substring.toDouble()
-            }
+            addition listener { operands += operands.removeLast() + operands.removeLast() }
+            subtraction listener { operands += operands.removeLast() - operands.removeLast() }
+            multiplication listener { operands += operands.removeLast() * operands.removeLast() }
+            division listener { operands += operands.removeLast() / operands.removeLast() }
+            number listener { operands += substring.toDouble() }
 
             returns { operands.last }
         }
-        println("\n" + math("(1 + 2) * 3"))
+        println("\n" + math.parse("(1 + 2) * 3")?.treeString())
     }
 
     @Test

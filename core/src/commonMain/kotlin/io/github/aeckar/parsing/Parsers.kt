@@ -90,8 +90,7 @@ internal class OperatorProperties<R>(def: OperatorDefinition<R>) {
 @Suppress("UNCHECKED_CAST")
 @PublishedApi
 internal fun SyntaxTreeNode<*>.invokeListeners(parser: Parser): SyntaxTreeNode<*> = onEach {
-    (parser.operator<Any?>().listenersMap[it.toString()]
-         as? Listener<Symbol>)
+    (parser.operator<Any?>().listenersMap[it.toString()] as? Listener<Symbol>)
         ?.apply { (it as SyntaxTreeNode<Symbol>)() }
 }
 
@@ -137,7 +136,7 @@ internal fun <R> Parser.operator() = when (this) {
  * A nameable parser.
  */
 public sealed class NameableParser(def: ParserDefinition) : Nameable, Parser {
-     internal val unnamedLogger = @Suppress("LeakingThis") logger("parser@${hashCode().toString(radix = 16)}")
+     internal val unnamedLogger = logger(toString())
     internal val parserSymbols = def.compileSymbols()
     internal open val operator: OperatorProperties<*> get() = raiseNonOperator()
 
@@ -159,6 +158,8 @@ public sealed class NameableParser(def: ParserDefinition) : Nameable, Parser {
         }
         throw MalformedParserException("Start symbol is undefined")
     }
+
+    final override fun toString(): String = "(unnamed parser 0x${hashCode().toString(radix = 16)})"
 }
 
 /**
@@ -229,9 +230,10 @@ public open class NameableLexerlessParser internal constructor(
  * A parser that parses its input directly, and is capable of evaluating it to some instance of type [R].
  */
 public class NameableLexerlessParserOperator<R> internal constructor(
-    def: LexerlessParserDefinition
+    def: LexerlessParserOperatorDefinition<R>
 ) : NameableLexerlessParser(def), Operator<R> {
     public override val listeners: Map<String, Listener<*>> get() = operator.listenersCopy
+    override val operator = OperatorProperties(def)
 
     override fun provideDelegate(
         thisRef: Any?,
@@ -347,9 +349,10 @@ public open class NameableLexerParser internal constructor(
  * A parser that tokenizes its input before parsing, and is capable of evaluating it to an instance of type [R].
  */
 public class NameableLexerParserOperator<R> internal constructor(
-    def: LexerParserDefinition
+    def: LexerParserOperatorDefinition<R>
 ) : NameableLexerParser(def), LexerOperator<R> {
     public override val listeners: Map<String, Listener<*>> get() = operator.listenersCopy
+    override val operator = OperatorProperties(def)
 
     override fun provideDelegate(
         thisRef: Any?,

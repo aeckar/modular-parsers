@@ -38,6 +38,8 @@ internal abstract class AbstractPivotIterator<out E, P : Comparable<P>, out H> i
     }
 
     final override fun pivots(): List<Pivot<P, H>> = cursor.toList()
+    final override fun toString() = revertible.toString()
+    final override fun hashCode() = revertible.hashCode()
 
-    // equals(), hashCode() implemented by revertible delegates
+    override fun equals(other: Any?) = revertible == other  // Overriden by delegate
 }

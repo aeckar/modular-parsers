@@ -108,18 +108,16 @@ public class LexerlessParserOperatorDefinition<R> internal constructor(
 ) : LexerlessParserDefinition(), OperatorDefinition<R> {
     override val operator = OperatorDefinitionProperties<R>()
 
-    private val def inline get() = this@LexerlessParserOperatorDefinition
-
     public override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: Listener<MatchT>
     ) {
-        with(def) { this@listener.listener(action) }
+        defineListener(this, action)
     }
 
     public override fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
         action: Listener<MatchT>
     ) {
-        with(def) { this@extendsListener.extendsListener(action) }
+        defineExtendsListener(this, action)
     }
 }
 
@@ -134,13 +132,13 @@ public class LexerParserOperatorDefinition<R> internal constructor() : LexerPars
     public override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: Listener<MatchT>
     ) {
-        with(def) { this@listener.listener(action) }
+        defineListener(this, action)
     }
 
     public override fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
         action: Listener<MatchT>
     ) {
-        with(def) { this@extendsListener.extendsListener(action) }
+        defineExtendsListener(this, action)
     }
 }
 
@@ -149,7 +147,7 @@ public class LexerParserOperatorDefinition<R> internal constructor() : LexerPars
 /**
  * Defines the configuration of a [Parser].
  */
-@ListenerDsl
+
 public sealed class ParserDefinition {
     internal val startDelegate = OnceAssignable<Symbol>(::MalformedParserException)
 
@@ -193,8 +191,7 @@ public sealed class ParserDefinition {
     protected open infix fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: Listener<MatchT>
     ) {
-        operator.ensureUndefinedListener(name)
-        operator.listeners[name] = action
+        defineListener(this, action)
     }   // Cannot make extension until context parameters are available
 
     /**
@@ -203,15 +200,30 @@ public sealed class ParserDefinition {
      * Whenever a match is made to this symbol,
      * the listener previously defined for this symbol is invoked before this one is.
      */
-    @Suppress("UNCHECKED_CAST")
     protected open infix fun <MatchT : NameableSymbol<out MatchT>> ForeignSymbol<out MatchT>.extendsListener(
         action: Listener<MatchT>
     ) {
+        defineExtendsListener(this, action)
+    }
+
+    protected fun <MatchT : NameableSymbol<out MatchT>> defineListener(
+        symbol: NamedSymbol<out MatchT>,
+        action: Listener<MatchT>
+    ) {
+        operator.ensureUndefinedListener(symbol.name)
+        operator.listeners[symbol.name] = action
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    protected fun <MatchT : NameableSymbol<out MatchT>> defineExtendsListener(
+        symbol: ForeignSymbol<out MatchT>,
+        action: Listener<MatchT>
+    ) {
         val def = this@ParserDefinition.operator
-        val operator = origin.operator<Any?>()
-        def.ensureExtensionCandidate(name, origin)
-        operator.listenersMap[name] = Listener {
-            with(operator.listenersMap.getValue(name) as Listener<MatchT>) {
+        val operator = symbol.origin.operator<Any?>()
+        def.ensureExtensionCandidate(symbol.name, symbol.origin)
+        operator.listenersMap[symbol.name] = Listener {
+            with(operator.listenersMap.getValue(symbol.name) as Listener<MatchT>) {
                 this@Listener()
             }
             with(action) { this@Listener() }

@@ -1,5 +1,8 @@
 package io.github.aeckar.parsing.containers
 
+/**
+ * Returns an initializer that can be passed to [linkedListOf].
+ */
 public fun <P : Comparable<P>, H> pivot(): (Pair<P, H>) -> Pivot<P, H> = { Pivot(it.first, it.second) }
 
 /**

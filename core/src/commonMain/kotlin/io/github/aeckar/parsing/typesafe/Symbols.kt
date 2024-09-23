@@ -11,7 +11,7 @@ public abstract class TypeSafeSymbol<
     TypeUnsafeT : TypeUnsafeSymbol<Self, TypeUnsafeT>,
     Self : TypeSafeSymbol<TypeUnsafeT, Self>
 > internal constructor(internal val typeUnsafe: TypeUnsafeT) : NameableSymbol<Self>() {
-    final override fun unwrap() = typeUnsafe
+    final override fun unwrap() = typeUnsafe.unwrap()
 
     @Suppress("UNCHECKED_CAST")
     final override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {

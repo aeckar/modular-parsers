@@ -1,5 +1,7 @@
 package io.github.aeckar.parsing
 
+import io.github.aeckar.parsing.utils.magentaBold
+
 /**
  * Represents a unique position in some input.
  *
@@ -20,4 +22,8 @@ internal class InputPosition {
      * Symbols that have previously been matched at the current position in the input.
      */
     val successes = mutableMapOf<Symbol, SyntaxTreeNode<*>>()
+
+    override fun toString(): String {
+        return "{symbols=$symbols,fails=$fails,successes=$successes}".magentaBold()
+    }
 }
