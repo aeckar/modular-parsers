@@ -19,11 +19,13 @@ public interface ReadOnlyList<E> : List<E> {
         }
 
         override fun get(index: Int) = this@ReadOnlyList[fromIndex + index]
-        override fun isEmpty() = size == 0
         override fun iterator() = listIterator()
         override fun listIterator() = listIterator(fromIndex)
         override fun containsAll(elements: Collection<E>) = elements.all { contains(it) }
         override fun contains(element: E) = indexOf(element) != -1
+
+        @Suppress("ReplaceSizeZeroCheckWithIsEmpty")
+        override fun isEmpty() = size == 0
 
         override fun listIterator(index: Int) = object : IndexableIterator<E>(), ListIterator<E> {
             override fun hasNext() = position < toIndex

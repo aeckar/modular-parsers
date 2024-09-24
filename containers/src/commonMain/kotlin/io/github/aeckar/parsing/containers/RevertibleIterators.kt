@@ -6,10 +6,6 @@ import kotlinx.io.readString
 
 private const val SECTION_SIZE = 8192L
 
-private fun raiseExhausted(): Nothing {
-    throw NoSuchElementException("Iterator is exhausted")
-}
-
 /**
  * A sequence of elements whose position can be saved and reverted to later.
  */
@@ -138,14 +134,7 @@ internal class ListRevertibleIterator<out E>(override val elements: List<E>) : I
     override fun hasNext() = position < elements.size
     override fun isExhausted() = position >= elements.size
     override fun next(): E = peek().also { ++position }
-
-    override fun peek(): E {
-        return try {
-            elements[position]
-        } catch (_: IndexOutOfBoundsException) {
-            raiseExhausted()
-        }
-    }
+    override fun peek() = checkBounds { elements[position] }
 }
 
 internal class StringRevertibleIterator(
@@ -154,14 +143,7 @@ internal class StringRevertibleIterator(
     override fun hasNext() = position < elements.length
     override fun isExhausted() = position >= elements.length
     override fun nextChar() = peekChar().also { ++position }
-
-    override fun peekChar(): Char {
-        return try {
-            elements[position]
-        } catch (_: IndexOutOfBoundsException) {
-            raiseExhausted()
-        }
-    }
+    override fun peekChar() = checkBounds { elements[position] }
 }
 
 internal class SourceRevertibleIterator(private val source: RawSource) : CharRevertibleIterator<SourcePosition> {
