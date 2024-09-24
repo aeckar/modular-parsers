@@ -28,7 +28,7 @@ public open class SyntaxTreeNode<MatchT : Symbol> internal constructor(
      * The substring matched by the symbol that produced this node.
      */
     public val substring: String
-) : TreeNode<SyntaxTreeNode<*>>() {
+) : TreeNode<SyntaxTreeNode<*>> {
     /**
      * The name assigned to this symbol, or null if one does not exist.
      */

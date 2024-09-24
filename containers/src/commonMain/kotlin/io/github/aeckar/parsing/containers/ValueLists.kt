@@ -2,12 +2,15 @@
 
 package io.github.aeckar.parsing.containers
 
-private const val INITIAL_SIZE = 10
+//  Mutable iterators typically unnecessary, and especially for performance-sensitive applications
+
+private const val DEFAULT_SIZE = 10 // Default size of Java list
+private const val GROWTH_FACTOR = 2
 
 /**
- * A list of unboxed boolean values.
+ * A list of unboxed values.
  */
-public interface NumberList {
+public interface ValueList {
     /**
      * The number of elements in this list.
      */
@@ -17,7 +20,7 @@ public interface NumberList {
 /**
  * A list of unboxed Booleans.
  */
-public class BooleanList : NumberList, Iterable<Boolean> {
+public class BooleanList : ValueList, Iterable<Boolean> {
     /**
      * The last element in this list.
      * @throws IllegalStateException stack is empty
@@ -32,7 +35,7 @@ public class BooleanList : NumberList, Iterable<Boolean> {
             buffer[size - 1] = value
         }
 
-    private var buffer: BooleanArray = BooleanArray(INITIAL_SIZE)
+    private var buffer: BooleanArray = BooleanArray(DEFAULT_SIZE)
 
     override var size: Int = 0
 
@@ -54,7 +57,7 @@ public class BooleanList : NumberList, Iterable<Boolean> {
      */
     public operator fun plusAssign(element: Boolean) {
         if (size == buffer.size) {
-            val new = BooleanArray(size * 2)
+            val new = BooleanArray(size * GROWTH_FACTOR)
             buffer.copyInto(new)
             buffer = new
         }
@@ -74,7 +77,7 @@ public class BooleanList : NumberList, Iterable<Boolean> {
 /**
  * A list of unboxed integers.
  */
-public class IntList : NumberList, Iterable<Int> {
+public class IntList : ValueList, Iterable<Int> {
     /**
      * The last element in this list.
      * @throws IllegalStateException stack is empty
@@ -89,7 +92,7 @@ public class IntList : NumberList, Iterable<Int> {
             buffer[size - 1] = value
         }
 
-    private var buffer: IntArray = IntArray(INITIAL_SIZE)
+    private var buffer: IntArray = IntArray(DEFAULT_SIZE)
 
     override var size: Int = 0
 
@@ -111,7 +114,7 @@ public class IntList : NumberList, Iterable<Int> {
      */
     public operator fun plusAssign(element: Int) {
         if (size == buffer.size) {
-            val new = IntArray(size * 2)
+            val new = IntArray(size * GROWTH_FACTOR)
             buffer.copyInto(new)
             buffer = new
         }
@@ -131,7 +134,7 @@ public class IntList : NumberList, Iterable<Int> {
 /**
  * A list of unboxed long integers.
  */
-public class LongList : NumberList, Iterable<Long> {
+public class LongList : ValueList, Iterable<Long> {
     /**
      * The last element in this list.
      * @throws IllegalStateException stack is empty
@@ -146,7 +149,7 @@ public class LongList : NumberList, Iterable<Long> {
             buffer[size - 1] = value
         }
 
-    private var buffer: LongArray = LongArray(INITIAL_SIZE)
+    private var buffer: LongArray = LongArray(DEFAULT_SIZE)
 
     override var size: Int = 0
 
@@ -168,7 +171,7 @@ public class LongList : NumberList, Iterable<Long> {
      */
     public operator fun plusAssign(element: Long) {
         if (size == buffer.size) {
-            val new = LongArray(size * 2)
+            val new = LongArray(size * GROWTH_FACTOR)
             buffer.copyInto(new)
             buffer = new
         }
@@ -188,7 +191,7 @@ public class LongList : NumberList, Iterable<Long> {
 /**
  * A list of unboxed double-precision floats.
  */
-public class DoubleList : NumberList, Iterable<Double> {
+public class DoubleList : ValueList, Iterable<Double> {
     /**
      * The last element in this list.
      * @throws IllegalStateException stack is empty
@@ -203,7 +206,7 @@ public class DoubleList : NumberList, Iterable<Double> {
             buffer[size - 1] = value
         }
 
-    private var buffer: DoubleArray = DoubleArray(INITIAL_SIZE)
+    private var buffer: DoubleArray = DoubleArray(DEFAULT_SIZE)
 
     override var size: Int = 0
 
@@ -225,7 +228,7 @@ public class DoubleList : NumberList, Iterable<Double> {
      */
     public operator fun plusAssign(element: Double) {
         if (size == buffer.size) {
-            val new = DoubleArray(size * 2)
+            val new = DoubleArray(size * GROWTH_FACTOR)
             buffer.copyInto(new)
             buffer = new
         }

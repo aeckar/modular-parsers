@@ -4,17 +4,27 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.PersistentList
 
 /**
+ * Returns a read-only view of the elements in this tree.
+ *
+ * Changes made to the underlying node are reflected back to this view.
+ * If the underlying list containing the children is reassigned, that change is not reflected.
+ */
+public fun <Self : TreeNode<Self>> TreeNode<Self>.readOnly(): TreeNode<Self> = object : TreeNode<Self> by this {
+    override val children: List<Self> = this@readOnly.children.readOnly()
+}
+
+/**
  * An element in a tree.
  *
  * Instances may contain child nodes, but do not contain a reference to their parent.
  */
-public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
+public interface TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
     /**
      * The child nodes of this one, or an empty list if none exist.
      *
-     * The default implementation of this property is an empty [PersistentList].
+     * The default implementation of this property returns the empty [PersistentList].
      */
-    public open val children: List<Self> = persistentListOf()
+    public val children: List<Self> get() = persistentListOf()
 
     /**
      * Contains the specific characters used to create the [treeString] of a node.
@@ -74,7 +84,7 @@ public abstract class TreeNode<Self : TreeNode<Self>> : Iterable<Self> {
      *
      * The first node returned is the bottom-left-most and the last node returned is this one.
      */
-    final override fun iterator(): Iterator<Self> = @Suppress("UNCHECKED_CAST") object : Iterator<Self> {
+    override fun iterator(): Iterator<Self> = @Suppress("UNCHECKED_CAST") object : Iterator<Self> {
         private var cursor = this@TreeNode as Self
         private val parentStack = mutableListOf<Self>()
         private val childIndices = IntList()

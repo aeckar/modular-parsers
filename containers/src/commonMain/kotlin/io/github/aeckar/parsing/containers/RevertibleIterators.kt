@@ -81,13 +81,8 @@ public interface CharRevertibleIterator<out P> : RevertibleIterator<Char, P>, Ch
 /**
  * A revertible iterator over an indexable sequence of elements.
  */
-internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, Int> {
+internal abstract class IndexableRevertibleIterator<out E> : IndexableIterator<E>(), RevertibleIterator<E, Int> {
     protected abstract val elements: Any?
-
-    /**
-     * The index of the element being pointed to by the iterator.
-     */
-    protected var position = 0
 
     private val savedPositions = IntList()
 
@@ -113,7 +108,7 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
         if (other === this) {
             return true
         }
-        if (other !is IndexRevertibleIterator<*>) {
+        if (other !is IndexableRevertibleIterator<*>) {
             return false
         }
         return elements === other.elements && position == other.position
@@ -139,7 +134,7 @@ internal abstract class IndexRevertibleIterator<out E> : RevertibleIterator<E, I
     }
 }
 
-internal class ListRevertibleIterator<out E>(override val elements: List<E>) : IndexRevertibleIterator<E>() {
+internal class ListRevertibleIterator<out E>(override val elements: List<E>) : IndexableRevertibleIterator<E>() {
     override fun hasNext() = position < elements.size
     override fun isExhausted() = position >= elements.size
     override fun next(): E = peek().also { ++position }
@@ -155,7 +150,7 @@ internal class ListRevertibleIterator<out E>(override val elements: List<E>) : I
 
 internal class StringRevertibleIterator(
     override val elements: String
-) : IndexRevertibleIterator<Char>(), CharRevertibleIterator<Int> {
+) : IndexableRevertibleIterator<Char>(), CharRevertibleIterator<Int> {
     override fun hasNext() = position < elements.length
     override fun isExhausted() = position >= elements.length
     override fun nextChar() = peekChar().also { ++position }

@@ -103,10 +103,11 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
 
     override fun match(attempt: ParsingAttempt): SyntaxTreeNode<*>? {
         val startPos = attempt.input.here() // TODO optimize by optionally passing this as an argument
+
         if (this in startPos.fails) {
             attempt.debug { "Match failed".redEmphasis() + " (Previous attempt failed)" }
             return null
-        }
+        }    // TODO debug recursions of a single symbol
         startPos.successes[this]?.let {
             attempt.debug {
                 "Match succeeded".greenEmphasis() +
@@ -114,7 +115,13 @@ public abstract class NameableSymbol<Self : NameableSymbol<Self>> internal const
             }
             return it.unsafeCast()
         }
-        attempt.debug { "Attempting match" }
+        attempt.debug {
+            val builder = StringBuilder("Attempting match")
+            if (this in startPos.symbols) {
+                builder.append(" (recursions = $)")
+            }
+            builder.toString()
+        }
         startPos.symbols += this
         attempt.input.save()
         val result = matchNoCache(attempt)

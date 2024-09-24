@@ -21,15 +21,46 @@ public inline fun <P, Self : ListNode<Self>> linkedListOf(
 }
 
 /**
+ * Returns an iterator over every element in this linked list, up to and including this node.
+ */
+public fun <Self : ListNode<Self>> Self?.reversed(): Iterable<Self> = Iterable {
+    object : Iterator<Self> {
+        var cursor: Self? = this@reversed as Self
+
+        override fun hasNext() = cursor != null
+
+        override fun next(): Self {
+            val cursor = cursor ?: throw NoSuchElementException("Node is head")
+            this.cursor = cursor.last
+            return cursor
+        }
+    }
+}
+
+/**
+ * Returns a list containing all nodes in this linked list.
+ *
+ * The mutability of the returned list cannot be guaranteed.
+ * If the receiver is null, an empty list is returned.
+ */
+public fun <Self: ListNode<Self>> Self?.toList(): List<Self> {
+    this ?: return listOf()
+    val elements = this
+    return mutableListOf<Self>().apply {
+        addAll(elements.reversed())
+        reverse()
+        next?.let { addAll(it) }
+    }
+}
+
+/**
  * An element in a linked list.
  *
  * A nullable property of this type whose value is null is considered an empty linked list.
  * Iterates over the elements in the linked list, starting from and including this one.
  */
 public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
-    @PublishedApi
-    internal var next: Self? = null
-
+    @PublishedApi internal var next: Self? = null
     internal var last: Self? = null
 
     /**
@@ -129,38 +160,5 @@ public abstract class ListNode<Self : ListNode<Self>> : Iterable<Self> {
             this.cursor = cursor.next
             return cursor
         }
-    }
-}
-
-/**
- * Returns an iterator over every element in this linked list, up to and including this node.
- */
-public fun <Self : ListNode<Self>> Self?.reversed(): Iterable<Self> = Iterable {
-    object : Iterator<Self> {
-        var cursor: Self? = this@reversed as Self
-
-        override fun hasNext() = cursor != null
-
-        override fun next(): Self {
-            val cursor = cursor ?: throw NoSuchElementException("Node is head")
-            this.cursor = cursor.last
-            return cursor
-        }
-    }
-}
-
-/**
- * Returns a list containing all nodes in this linked list.
- *
- * The mutability of the returned list cannot be guaranteed.
- * If the receiver is null, an empty list is returned.
- */
-public fun <Self: ListNode<Self>> Self?.toList(): List<Self> {
-    this ?: return listOf()
-    val elements = this
-    return mutableListOf<Self>().apply {
-        addAll(elements.reversed())
-        reverse()
-        next?.let { addAll(it) }
     }
 }
