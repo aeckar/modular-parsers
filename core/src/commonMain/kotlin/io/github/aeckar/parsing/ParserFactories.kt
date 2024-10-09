@@ -22,7 +22,7 @@ public fun parser(definition: LexerlessParserDefinition.() -> Unit): NameableLex
  * @throws MalformedParserException an implicit, imported, or [start][ParserDefinition.start] symbol is undefined
  */
 @OptIn(ExperimentalContracts::class)
-public fun <R> parserOperator(
+public fun <R> parserOperator(  // TODO test builder inference
     definition: LexerlessParserOperatorDefinition<R>.() -> ReturnDescriptor<R>
 ): NameableLexerlessParserOperator<R> {
     contract { callsInPlace(definition, InvocationKind.EXACTLY_ONCE) }

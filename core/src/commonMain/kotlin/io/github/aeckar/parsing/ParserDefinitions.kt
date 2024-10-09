@@ -127,8 +127,6 @@ public class LexerlessParserOperatorDefinition<R> internal constructor(
 public class LexerParserOperatorDefinition<R> internal constructor() : LexerParserDefinition(), OperatorDefinition<R> {
     override val operator = OperatorDefinitionProperties<R>()
 
-    private val def inline get() = this@LexerParserOperatorDefinition
-
     public override fun <MatchT : NameableSymbol<out MatchT>> NamedSymbol<out MatchT>.listener(
         action: Listener<MatchT>
     ) {

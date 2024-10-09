@@ -32,11 +32,11 @@ class ParserTest {
 
     @Test
     fun `arithmetic with evaluation`() {
-        val math by parserOperator<Double> {
+        val math by parserOperator {
             // ---- fragments ----
             val DIGIT = of("0-9")
             val WHOLE_PART = multiple(DIGIT)
-            val DECIMAL_PART = '.' + multiple(DIGIT)
+            val DECIMAL_PART: Symbol = '.' + multiple(DIGIT)
 
             // ---- symbols ----
             val expression by junction()
